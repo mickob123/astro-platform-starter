@@ -5,33 +5,38 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Invoice Automation - Admin Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     .loader { border-top-color: #3b82f6; animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
-  <!-- Config Modal -->
-  <div id="configModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+  <!-- Login Modal -->
+  <div id="loginModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
     <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4">
-      <h2 class="text-2xl font-bold mb-4">Configure Connection</h2>
-      <p class="text-gray-600 mb-6">Enter your Supabase project details to get started.</p>
+      <h2 class="text-2xl font-bold mb-2">Invoice Automation</h2>
+      <p class="text-gray-600 mb-6">Sign in to access the admin dashboard.</p>
 
-      <div class="space-y-4">
+      <form id="loginForm" class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Supabase Project URL</label>
-          <input type="url" id="supabaseUrl" placeholder="https://xxxxx.supabase.co"
+          <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+          <input type="email" id="loginEmail" required placeholder="admin@company.com"
             class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Service Role Key</label>
-          <input type="password" id="serviceRoleKey" placeholder="eyJhbGciOiJIUzI1NiIs..."
+          <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+          <input type="password" id="loginPassword" required placeholder="••••••••"
             class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-          <p class="text-xs text-gray-500 mt-1">Found in Supabase → Settings → API</p>
         </div>
-        <button onclick="saveConfig()" class="w-full bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700">
-          Connect
+        <div id="loginError" class="hidden text-red-600 text-sm"></div>
+        <button type="submit" id="loginBtn" class="w-full bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700">
+          Sign In
         </button>
+      </form>
+
+      <div class="mt-6 pt-6 border-t">
+        <p class="text-xs text-gray-500 text-center">Powered by Supabase Auth</p>
       </div>
     </div>
   </div>
@@ -43,8 +48,9 @@
       <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
         <h1 class="text-2xl font-bold text-gray-900">Invoice Automation</h1>
         <div class="flex items-center gap-4">
-          <span id="connectionStatus" class="text-sm text-green-600">● Connected</span>
-          <button onclick="showConfig()" class="text-gray-500 hover:text-gray-700">Settings</button>
+          <span id="userEmail" class="text-sm text-gray-600"></span>
+          <span class="text-sm text-green-600">● Connected</span>
+          <button onclick="logout()" class="text-red-500 hover:text-red-700 text-sm">Logout</button>
         </div>
       </div>
     </header>
@@ -157,7 +163,7 @@
             <p><strong>Customer ID:</strong> <code id="new-customer-id" class="bg-green-100 px-2 py-1 rounded"></code></p>
             <p><strong>API Key:</strong> <code id="new-api-key" class="bg-green-100 px-2 py-1 rounded break-all"></code></p>
           </div>
-          <p class="text-red-600 font-medium mt-4">⚠️ Save the API key now - it won't be shown again!</p>
+          <p class="text-red-600 font-medium mt-4">Save the API key now - it won't be shown again!</p>
           <button onclick="copyApiKey()" class="mt-4 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
             Copy API Key
           </button>
@@ -167,40 +173,79 @@
   </div>
 
   <script>
-    let config = JSON.parse(localStorage.getItem('invoiceAdminConfig') || 'null');
+    // Supabase configuration - UPDATE THIS WITH YOUR PROJECT URL
+    const SUPABASE_URL = 'https://tcgptxbqqyxmvsaqiblc.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjZ3B0eGJxcXl4bXZzYXFpYmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc2MjU1MDAsImV4cCI6MjA1MzIwMTUwMH0.1234567890'; // Replace with your actual anon key
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    let session = null;
 
     // Initialize
-    document.addEventListener('DOMContentLoaded', () => {
-      if (config && config.url && config.key) {
-        document.getElementById('configModal').classList.add('hidden');
-        document.getElementById('app').classList.remove('hidden');
-        loadDashboard();
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Check for existing session
+      const { data: { session: existingSession } } = await supabase.auth.getSession();
+
+      if (existingSession) {
+        session = existingSession;
+        showApp();
       }
+
+      // Listen for auth changes
+      supabase.auth.onAuthStateChange((event, newSession) => {
+        session = newSession;
+        if (event === 'SIGNED_IN') {
+          showApp();
+        } else if (event === 'SIGNED_OUT') {
+          showLogin();
+        }
+      });
     });
 
-    function saveConfig() {
-      const url = document.getElementById('supabaseUrl').value.trim();
-      const key = document.getElementById('serviceRoleKey').value.trim();
+    // Login form handler
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value;
+      const password = document.getElementById('loginPassword').value;
+      const errorEl = document.getElementById('loginError');
+      const btn = document.getElementById('loginBtn');
 
-      if (!url || !key) {
-        alert('Please enter both URL and key');
+      btn.disabled = true;
+      btn.textContent = 'Signing in...';
+      errorEl.classList.add('hidden');
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        errorEl.textContent = error.message;
+        errorEl.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
         return;
       }
 
-      config = { url: url.replace(/\/$/, ''), key };
-      localStorage.setItem('invoiceAdminConfig', JSON.stringify(config));
+      session = data.session;
+      showApp();
+    });
 
-      document.getElementById('configModal').classList.add('hidden');
+    function showApp() {
+      document.getElementById('loginModal').classList.add('hidden');
       document.getElementById('app').classList.remove('hidden');
+      document.getElementById('userEmail').textContent = session?.user?.email || '';
       loadDashboard();
     }
 
-    function showConfig() {
-      if (config) {
-        document.getElementById('supabaseUrl').value = config.url;
-        document.getElementById('serviceRoleKey').value = config.key;
-      }
-      document.getElementById('configModal').classList.remove('hidden');
+    function showLogin() {
+      document.getElementById('loginModal').classList.remove('hidden');
+      document.getElementById('app').classList.add('hidden');
+    }
+
+    async function logout() {
+      await supabase.auth.signOut();
+      session = null;
+      showLogin();
     }
 
     function showTab(tabName) {
@@ -219,22 +264,39 @@
     }
 
     async function apiCall(endpoint, method = 'GET', body = null) {
+      if (!session) {
+        showLogin();
+        throw new Error('Not authenticated');
+      }
+
       const options = {
         method,
         headers: {
-          'Authorization': `Bearer ${config.key}`,
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': SUPABASE_ANON_KEY,
           'Content-Type': 'application/json',
         },
       };
       if (body) options.body = JSON.stringify(body);
 
-      const response = await fetch(`${config.url}/functions/v1/${endpoint}`, options);
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/${endpoint}`, options);
+
+      if (response.status === 401) {
+        await logout();
+        throw new Error('Session expired');
+      }
+
       return response.json();
     }
 
     async function loadDashboard() {
       try {
         const data = await apiCall('admin-get-dashboard');
+
+        if (data.error) {
+          document.getElementById('recent-invoices').innerHTML = `<p class="text-red-500">Error: ${data.error}</p>`;
+          return;
+        }
 
         document.getElementById('stat-customers').textContent = data.stats?.total_customers || 0;
         document.getElementById('stat-today').textContent = data.stats?.invoices_today || 0;
@@ -276,6 +338,11 @@
     async function loadCustomers() {
       try {
         const data = await apiCall('admin-list-customers');
+
+        if (data.error) {
+          document.getElementById('customers-list').innerHTML = `<p class="text-red-500">Error: ${data.error}</p>`;
+          return;
+        }
 
         const html = data.customers?.length > 0
           ? `<table class="w-full">
