@@ -177,13 +177,13 @@
     const SUPABASE_URL = 'https://tcgptxbqqyxmvsaqiblc.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjZ3B0eGJxcXl4bXZzYXFpYmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzOTQwODksImV4cCI6MjA4NTk3MDA4OX0.nyTEkolz8sft-qFoHpwsLl4F4JkIEW7A3c8aPGftprc';
 
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     let session = null;
 
     // Initialize
     document.addEventListener('DOMContentLoaded', async () => {
       // Check for existing session
-      const { data: { session: existingSession } } = await supabase.auth.getSession();
+      const { data: { session: existingSession } } = await supabaseClient.auth.getSession();
 
       if (existingSession) {
         session = existingSession;
@@ -191,7 +191,7 @@
       }
 
       // Listen for auth changes
-      supabase.auth.onAuthStateChange((event, newSession) => {
+      supabaseClient.auth.onAuthStateChange((event, newSession) => {
         session = newSession;
         if (event === 'SIGNED_IN') {
           showApp();
@@ -213,7 +213,7 @@
       btn.textContent = 'Signing in...';
       errorEl.classList.add('hidden');
 
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabaseClient.auth.signInWithPassword({
         email,
         password,
       });
@@ -243,7 +243,7 @@
     }
 
     async function logout() {
-      await supabase.auth.signOut();
+      await supabaseClient.auth.signOut();
       session = null;
       showLogin();
     }
