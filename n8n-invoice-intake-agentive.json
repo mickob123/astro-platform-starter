@@ -1,0 +1,221 @@
+{
+  "name": "Invoice Intake - Agentive",
+  "nodes": [
+    {
+      "id": "gmail-trigger-1",
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.3,
+      "position": [260, 300],
+      "parameters": {
+        "authentication": "oAuth2",
+        "event": "messageReceived",
+        "simple": false,
+        "filters": {
+          "readStatus": "unread"
+        },
+        "options": {
+          "downloadAttachments": true,
+          "dataPropertyAttachmentsPrefixName": "attachment_"
+        }
+      }
+    },
+    {
+      "id": "http-request-1",
+      "name": "Process Invoice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [520, 300],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "https://tcgptxbqqyxmvsaqiblc.supabase.co/functions/v1/process-invoice",
+        "authentication": "none",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjZ3B0eGJxcXl4bXZzYXFpYmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzOTQwODksImV4cCI6MjA4NTk3MDA4OX0.nyTEkolz8sft-qFoHpwsLl4F4JkIEW7A3c8aPGftprc"
+            },
+            {
+              "name": "x-api-key",
+              "value": "inv_85faae7910374ee7d0c37cd3af67e6e824445ecc215e0fdf90277436f09e83f2"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"email_subject\": \"{{ $json.subject }}\",\n  \"email_body\": \"{{ $json.snippet || $json.textPlain || '' }}\",\n  \"attachment_text\": {{ $json.textPlain ? '\"' + $json.textPlain + '\"' : 'null' }},\n  \"metadata\": {\n    \"from\": \"{{ $json.from.value[0].address || $json.from }}\",\n    \"gmail_message_id\": \"{{ $json.id }}\"\n  }\n}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "if-check-success",
+      "name": "Check Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [780, 300],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "condition-status-200",
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              },
+              "leftValue": "={{ $json.statusCode }}",
+              "rightValue": 200
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "set-log-success",
+      "name": "Log Success",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1040, 200],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-invoice-id",
+              "name": "invoice_id",
+              "type": "string",
+              "value": "={{ $json.body.invoice_id }}"
+            },
+            {
+              "id": "assign-status",
+              "name": "status",
+              "type": "string",
+              "value": "={{ $json.body.status || 'success' }}"
+            },
+            {
+              "id": "assign-message",
+              "name": "message",
+              "type": "string",
+              "value": "=Invoice processed successfully from email: {{ $('Gmail Trigger').item.json.subject }}"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "set-log-error",
+      "name": "Log Error",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1040, 420],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-error-status-code",
+              "name": "error_status_code",
+              "type": "number",
+              "value": "={{ $json.statusCode }}"
+            },
+            {
+              "id": "assign-error-message",
+              "name": "error_message",
+              "type": "string",
+              "value": "={{ $json.body.error || $json.body.message || 'Unknown error' }}"
+            },
+            {
+              "id": "assign-error-email-subject",
+              "name": "failed_email_subject",
+              "type": "string",
+              "value": "={{ $('Gmail Trigger').item.json.subject }}"
+            },
+            {
+              "id": "assign-error-email-from",
+              "name": "failed_email_from",
+              "type": "string",
+              "value": "={{ $('Gmail Trigger').item.json.from.value[0].address || $('Gmail Trigger').item.json.from }}"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Process Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Invoice": {
+      "main": [
+        [
+          {
+            "node": "Check Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Success": {
+      "main": [
+        [
+          {
+            "node": "Log Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true
+  },
+  "active": false
+}

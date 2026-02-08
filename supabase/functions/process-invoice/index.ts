@@ -205,7 +205,7 @@ Deno.serve(async (req: Request) => {
 
     // Upsert vendor (normalized_name for deduplication)
     const vendorName = extraction.vendor_name || classification.vendor_name || "Unknown Vendor";
-    const normalizedName = vendorName.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-");
+    const normalizedName = vendorName.toLowerCase().replace(/[^a-z0-9]/g, "");
     const { data: vendorData } = await supabase
       .from("vendors")
       .upsert(
@@ -339,7 +339,6 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({
         error: "Processing failed",
         log_id: logId,
-        detail: error instanceof Error ? error.message : undefined,
       }),
       { status: 500, headers: { ...headers, "Content-Type": "application/json" } },
     );

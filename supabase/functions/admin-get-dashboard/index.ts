@@ -10,7 +10,7 @@
  *   page (default: 1)
  *   limit (default: 25, max: 100)
  *   customer_id (optional, filter to specific customer)
- *   status (optional: pending_approval, approved, flagged, rejected)
+ *   status (optional: pending, approved, flagged, rejected, synced, error)
  */
 
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
@@ -59,13 +59,13 @@ Deno.serve(async (req: Request) => {
       0,
     );
     const pendingCount = allInvoices.filter(
-      (inv: { status?: string }) => inv.status === "pending_approval",
+      (inv: { status?: string }) => inv.status === "pending",
     ).length;
     const flaggedCount = allInvoices.filter(
       (inv: { status?: string }) => inv.status === "flagged",
     ).length;
     const failedLogs = (logsResult.data || []).filter(
-      (log: { status?: string }) => log.status === "failed",
+      (log: { status?: string }) => log.status === "error",
     ).length;
 
     // --- Paginated invoices ---
@@ -73,7 +73,7 @@ Deno.serve(async (req: Request) => {
     let invoiceQuery = supabase
       .from("invoices")
       .select(
-        "id, customer_id, vendor_id, invoice_number, invoice_date, due_date, currency, total, status, is_valid, classification_confidence, created_at",
+        "id, customer_id, vendor_id, invoice_number, invoice_date, due_date, currency, total, status, is_valid, confidence, created_at",
         { count: "exact" },
       );
 

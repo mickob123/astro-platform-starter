@@ -99,7 +99,7 @@ Deno.serve(async (req: Request) => {
     }
     console.error("admin-create-customer error:", error);
     return new Response(
-      JSON.stringify({ error: "Failed to create customer", detail: error instanceof Error ? error.message : String(error) }),
+      JSON.stringify({ error: "Failed to create customer" }),
       { status: 500, headers: { ...headers, "Content-Type": "application/json" } },
     );
   }

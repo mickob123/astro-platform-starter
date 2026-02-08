@@ -44,10 +44,14 @@ Deno.serve(async (req: Request) => {
 
     let query = supabase
       .from("customers")
-      .select("id, name, email, is_active, accounting_system, created_at", { count: "exact" });
+      .select("id, name, email, is_active, accounting_platform, created_at", { count: "exact" });
 
     if (search) {
-      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
+      // Sanitize to prevent PostgREST filter injection
+      const sanitized = search.replace(/[%_(),.\\]/g, "");
+      if (sanitized) {
+        query = query.or(`name.ilike.%${sanitized}%,email.ilike.%${sanitized}%`);
+      }
     }
 
     const { data, count, error } = await query
