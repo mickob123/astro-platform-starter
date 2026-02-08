@@ -204,13 +204,14 @@ Deno.serve(async (req: Request) => {
       .eq("id", logId);
 
     // Upsert vendor (normalized_name for deduplication)
-    const normalizedName = extraction.vendor_name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-");
+    const vendorName = extraction.vendor_name || classification.vendor_name || "Unknown Vendor";
+    const normalizedName = vendorName.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-");
     const { data: vendorData } = await supabase
       .from("vendors")
       .upsert(
         {
           customer_id: customerId,
-          name: extraction.vendor_name,
+          name: vendorName,
           normalized_name: normalizedName,
         },
         { onConflict: "customer_id,normalized_name" },
