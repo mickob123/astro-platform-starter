@@ -45,20 +45,6 @@ All dates YYYY-MM-DD. All monetary values as numbers. Missing optional fields mu
 
 const MATH_TOLERANCE = 0.01;
 
-interface ProcessingLog {
-  id?: string;
-  customer_id: string;
-  status: string;
-  step: string;
-  input_hash: string;
-  classification_result?: Record<string, unknown>;
-  extraction_result?: Record<string, unknown>;
-  validation_result?: Record<string, unknown>;
-  invoice_id?: string;
-  error_message?: string;
-  created_at?: string;
-}
-
 Deno.serve(async (req: Request) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
@@ -67,6 +53,7 @@ Deno.serve(async (req: Request) => {
   let logId: string | null = null;
   let supabase: Awaited<ReturnType<typeof verifyApiKey>>["supabase"] | null = null;
   let customerId: string | null = null;
+  const startTime = Date.now();
 
   try {
     // --- Auth ---
@@ -92,14 +79,13 @@ Deno.serve(async (req: Request) => {
     }
 
     // --- Create processing log (audit trail) ---
-    const inputHash = await hashInput(`${email_subject}|${email_body}|${attachment_text || ""}`);
     const { data: logData, error: logError } = await supabase
       .from("processing_logs")
       .insert({
         customer_id: customerId,
-        status: "processing",
+        status: "started",
         step: "classify",
-        input_hash: inputHash,
+        input: { email_subject, email_body, attachment_text: attachment_text || null },
       })
       .select("id")
       .single();
@@ -132,14 +118,19 @@ Deno.serve(async (req: Request) => {
     // Update log with classification result
     await supabase
       .from("processing_logs")
-      .update({ classification_result: classification, step: "classify_done" })
+      .update({ output: { classification }, step: "classify_done" })
       .eq("id", logId);
 
     // If not an invoice, stop here
     if (!classification.is_invoice) {
       await supabase
         .from("processing_logs")
-        .update({ status: "skipped", step: "not_invoice" })
+        .update({
+          status: "success",
+          step: "not_invoice",
+          output: { classification, result: "skipped" },
+          duration_ms: Date.now() - startTime,
+        })
         .eq("id", logId);
 
       return new Response(
@@ -177,7 +168,7 @@ Deno.serve(async (req: Request) => {
 
     await supabase
       .from("processing_logs")
-      .update({ extraction_result: extraction, step: "extract_done" })
+      .update({ output: { classification, extraction }, step: "extract_done" })
       .eq("id", logId);
 
     // --- Step 3: Validate ---
@@ -200,7 +191,10 @@ Deno.serve(async (req: Request) => {
 
     await supabase
       .from("processing_logs")
-      .update({ validation_result: validationResult, step: "validate_done" })
+      .update({
+        output: { classification, extraction, validation: validationResult },
+        step: "validate_done",
+      })
       .eq("id", logId);
 
     // --- Step 4: Save to database ---
@@ -209,20 +203,22 @@ Deno.serve(async (req: Request) => {
       .update({ step: "save" })
       .eq("id", logId);
 
-    // Upsert vendor
+    // Upsert vendor (normalized_name for deduplication)
+    const normalizedName = extraction.vendor_name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-");
     const { data: vendorData } = await supabase
       .from("vendors")
       .upsert(
         {
           customer_id: customerId,
           name: extraction.vendor_name,
+          normalized_name: normalizedName,
         },
-        { onConflict: "customer_id,name" },
+        { onConflict: "customer_id,normalized_name" },
       )
       .select("id")
       .single();
 
-    // Insert invoice record
+    // Insert invoice record — matches actual invoices table schema
     const { data: invoiceData, error: invoiceError } = await supabase
       .from("invoices")
       .insert({
@@ -236,15 +232,15 @@ Deno.serve(async (req: Request) => {
         tax: extraction.tax,
         total: extraction.total,
         line_items: extraction.line_items,
-        classification_confidence: classification.confidence,
-        classification_signals: classification.signals,
+        raw_text: documentText,
+        confidence: classification.confidence,
+        signals: classification.signals,
+        is_valid: validationResult.is_valid,
         validation_errors: validationResult.errors,
         validation_warnings: validationResult.warnings,
-        is_valid: validationResult.is_valid,
-        status: validationResult.is_valid ? "pending_approval" : "flagged",
-        raw_email_subject: email_subject,
-        raw_email_body: email_body,
-        metadata: metadata || {},
+        status: validationResult.is_valid ? "pending" : "flagged",
+        source_email_subject: email_subject,
+        source_email_from: metadata?.from || null,
       })
       .select("id")
       .single();
@@ -294,7 +290,12 @@ Deno.serve(async (req: Request) => {
     // --- Done ---
     await supabase
       .from("processing_logs")
-      .update({ status: "completed", step: "done" })
+      .update({
+        status: "success",
+        step: "done",
+        duration_ms: Date.now() - startTime,
+        output: { classification, extraction, validation: validationResult, invoice_id: invoiceData.id },
+      })
       .eq("id", logId);
 
     return new Response(
@@ -315,8 +316,9 @@ Deno.serve(async (req: Request) => {
         await supabase
           .from("processing_logs")
           .update({
-            status: "failed",
+            status: "error",
             error_message: error instanceof Error ? error.message : String(error),
+            duration_ms: Date.now() - startTime,
           })
           .eq("id", logId);
       } catch {
@@ -475,12 +477,4 @@ function buildSlackBlocks(data: {
   );
 
   return { blocks };
-}
-
-async function hashInput(input: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(input);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
