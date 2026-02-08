@@ -27,7 +27,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json();
-    const { name, email, slack_webhook_url, accounting_system } = body;
+    const { name, email, slack_webhook_url, accounting_platform } = body;
 
     if (!name || !email) {
       return new Response(
@@ -35,6 +35,9 @@ Deno.serve(async (req: Request) => {
         { status: 400, headers: { ...headers, "Content-Type": "application/json" } },
       );
     }
+
+    // Generate slug from name: "Acme Corp" -> "acme-corp"
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
     // Use service role for admin operations
     const supabase = createClient(
@@ -47,9 +50,10 @@ Deno.serve(async (req: Request) => {
       .from("customers")
       .insert({
         name,
+        slug,
         email,
         slack_webhook_url: slack_webhook_url || null,
-        accounting_system: accounting_system || null,
+        accounting_platform: accounting_platform || null,
         is_active: true,
       })
       .select("id, name, email")
@@ -72,7 +76,7 @@ Deno.serve(async (req: Request) => {
     const { error: keyError } = await supabase.from("api_keys").insert({
       customer_id: customer.id,
       key_hash: keyHash,
-      label: `Default key for ${name}`,
+      name: `Default key for ${name}`,
       is_active: true,
     });
 
