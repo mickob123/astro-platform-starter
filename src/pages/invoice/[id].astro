@@ -65,7 +65,15 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
         <!-- Invoice Info Card -->
         <div class="card bg-base-100 shadow-sm">
           <div class="card-body">
-            <h2 class="card-title text-lg mb-4">Invoice Information</h2>
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="card-title text-lg">Invoice Information</h2>
+              <div class="flex gap-2">
+                <button id="btn-edit-invoice" class="btn btn-ghost btn-xs">Edit</button>
+                <button id="btn-save-invoice" class="btn btn-primary btn-xs hidden">Save</button>
+                <button id="btn-cancel-edit" class="btn btn-ghost btn-xs hidden">Cancel</button>
+              </div>
+            </div>
+            <div id="edit-feedback" class="hidden mb-3"></div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
               <div>
                 <p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Invoice Number</p>
@@ -155,6 +163,34 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
                 </thead>
                 <tbody id="line-items-body"></tbody>
               </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Comments Section -->
+        <div class="card bg-base-100 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title text-lg mb-4">Comments &amp; Discussion</h2>
+
+            <!-- Comments list (scrollable) -->
+            <div id="comments-list" class="max-h-96 overflow-y-auto space-y-3 mb-4">
+              <div id="comments-empty" class="text-center py-6 text-base-content/40">
+                <p class="text-sm">No comments yet. Start the discussion.</p>
+              </div>
+              <div id="comments-loading" class="hidden flex justify-center py-4">
+                <span class="loading loading-spinner loading-sm"></span>
+              </div>
+            </div>
+
+            <!-- Comment input -->
+            <div class="border-t border-base-200 pt-3">
+              <div class="flex gap-2">
+                <textarea id="comment-input" class="textarea textarea-bordered flex-1 text-sm" placeholder="Add a comment... Use @name to mention someone" rows="2"></textarea>
+                <button id="btn-send-comment" class="btn btn-primary btn-sm self-end" disabled>
+                  Send
+                </button>
+              </div>
+              <p class="text-xs opacity-40 mt-1">Press Cmd+Enter to send</p>
             </div>
           </div>
         </div>
@@ -316,6 +352,17 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
       updated_at: string | null;
     }
 
+    interface Comment {
+      id: string;
+      invoice_id: string;
+      user_id: string | null;
+      user_name: string | null;
+      user_email: string | null;
+      content: string;
+      is_system: boolean;
+      created_at: string;
+    }
+
     // --- DOM references ---
     const loadingState = document.getElementById('loading-state')!;
     const errorState = document.getElementById('error-state')!;
@@ -410,6 +457,22 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
       loadingState.classList.add('hidden');
       errorState.classList.add('hidden');
       invoiceContent.classList.remove('hidden');
+    }
+
+    function formatRelativeTime(dateStr: string): string {
+      const now = new Date();
+      const date = new Date(dateStr);
+      const diffMs = now.getTime() - date.getTime();
+      const diffSeconds = Math.floor(diffMs / 1000);
+      const diffMinutes = Math.floor(diffSeconds / 60);
+      const diffHours = Math.floor(diffMinutes / 60);
+      const diffDays = Math.floor(diffHours / 24);
+
+      if (diffSeconds < 60) return 'just now';
+      if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
+      if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+      if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+      return formatDate(dateStr);
     }
 
     // --- Fetch invoice data ---
