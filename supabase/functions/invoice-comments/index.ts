@@ -28,8 +28,10 @@ Deno.serve(async (req: Request) => {
     );
 
     // Get the user's customer_id from JWT app_metadata
+    // Admin users may not have a customer_id — they can access any invoice's comments
+    const isAdmin = user.app_metadata?.role === "admin";
     const customerId = user.app_metadata?.customer_id as string | undefined;
-    if (!customerId) {
+    if (!customerId && !isAdmin) {
       return new Response(
         JSON.stringify({ error: "User is not associated with a customer" }),
         { status: 403, headers: { ...headers, "Content-Type": "application/json" } },
@@ -71,18 +73,20 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      if (invoice.customer_id !== customerId) {
+      if (!isAdmin && invoice.customer_id !== customerId) {
         return new Response(
           JSON.stringify({ error: "Invoice not found" }),
           { status: 404, headers: { ...headers, "Content-Type": "application/json" } },
         );
       }
 
+      const effectiveCustomerId = customerId || invoice.customer_id;
+
       const { data: comments, error: fetchError } = await supabase
         .from("invoice_comments")
         .select("*")
         .eq("invoice_id", invoiceId)
-        .eq("customer_id", customerId)
+        .eq("customer_id", effectiveCustomerId)
         .order("created_at", { ascending: true });
 
       if (fetchError) throw new Error(`Failed to fetch comments: ${fetchError.message}`);
@@ -142,7 +146,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (invoice.customer_id !== customerId) {
+    if (!isAdmin && invoice.customer_id !== customerId) {
       return new Response(
         JSON.stringify({ error: "Invoice not found" }),
         { status: 404, headers: { ...headers, "Content-Type": "application/json" } },
