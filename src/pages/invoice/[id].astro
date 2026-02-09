@@ -682,6 +682,314 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
       return div.innerHTML;
     }
 
+    // --- Comments ---
+    async function loadComments(invoiceId: string) {
+      const commentsList = document.getElementById('comments-list')!;
+      const commentsEmpty = document.getElementById('comments-empty')!;
+      const commentsLoading = document.getElementById('comments-loading')!;
+
+      commentsLoading.classList.remove('hidden');
+      commentsEmpty.classList.add('hidden');
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const res = await fetch(`${FUNCTIONS_URL}/invoice-comments?invoice_id=${encodeURIComponent(invoiceId)}`, {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!res.ok) {
+          throw new Error('Failed to load comments');
+        }
+
+        const data = await res.json();
+        const comments: Comment[] = data.comments || [];
+
+        renderComments(comments);
+      } catch (err) {
+        console.error('Error loading comments:', err);
+        commentsEmpty.classList.remove('hidden');
+        commentsEmpty.innerHTML = '<p class="text-sm text-error">Failed to load comments.</p>';
+      } finally {
+        commentsLoading.classList.add('hidden');
+      }
+    }
+
+    function renderComments(comments: Comment[]) {
+      const commentsList = document.getElementById('comments-list')!;
+      const commentsEmpty = document.getElementById('comments-empty')!;
+
+      // Remove all existing comment items
+      const existingComments = commentsList.querySelectorAll('.comment-item');
+      existingComments.forEach(el => el.remove());
+
+      if (comments.length === 0) {
+        commentsEmpty.classList.remove('hidden');
+        commentsEmpty.innerHTML = '<p class="text-sm">No comments yet. Start the discussion.</p>';
+        return;
+      }
+
+      commentsEmpty.classList.add('hidden');
+
+      comments.forEach(comment => {
+        const el = document.createElement('div');
+        el.className = 'comment-item';
+
+        if (comment.is_system) {
+          el.innerHTML = `
+            <div class="flex items-center justify-center gap-2 py-2 text-xs opacity-50">
+              <span class="w-4 h-4">\u2713</span>
+              <span>${escapeHtml(comment.content)}</span>
+              <span>\u2022 ${formatDate(comment.created_at)}</span>
+            </div>
+          `;
+        } else {
+          const displayName = comment.user_name || comment.user_email || 'Unknown';
+          const initial = displayName.charAt(0).toUpperCase();
+
+          el.innerHTML = `
+            <div class="flex gap-3 p-3 rounded-lg bg-base-200/50">
+              <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                ${escapeHtml(initial)}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-baseline gap-2">
+                  <span class="font-semibold text-sm">${escapeHtml(displayName)}</span>
+                  <span class="text-xs opacity-40">${formatRelativeTime(comment.created_at)}</span>
+                </div>
+                <p class="text-sm mt-1">${escapeHtml(comment.content)}</p>
+              </div>
+            </div>
+          `;
+        }
+
+        commentsList.appendChild(el);
+      });
+
+      // Scroll to bottom
+      commentsList.scrollTop = commentsList.scrollHeight;
+    }
+
+    async function sendComment() {
+      if (!currentInvoice) return;
+
+      const input = document.getElementById('comment-input') as HTMLTextAreaElement;
+      const sendBtn = document.getElementById('btn-send-comment') as HTMLButtonElement;
+      const content = input.value.trim();
+
+      if (!content) return;
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        window.location.href = '/login';
+        return;
+      }
+
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Sending...';
+
+      try {
+        const res = await fetch(`${FUNCTIONS_URL}/invoice-comments`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            invoice_id: currentInvoice.id,
+            content: content,
+          }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Failed to send comment');
+        }
+
+        // Clear input
+        input.value = '';
+        sendBtn.disabled = true;
+
+        // Re-fetch comments
+        await loadComments(currentInvoice.id);
+
+      } catch (err: any) {
+        console.error('Error sending comment:', err);
+        alert(err.message || 'Failed to send comment.');
+      } finally {
+        sendBtn.textContent = 'Send';
+        // Re-check if send should be enabled
+        sendBtn.disabled = !input.value.trim();
+      }
+    }
+
+    // --- Edit Mode ---
+    let isEditMode = false;
+
+    function enterEditMode() {
+      if (!currentInvoice) return;
+      isEditMode = true;
+
+      // Show save/cancel, hide edit
+      document.getElementById('btn-edit-invoice')!.classList.add('hidden');
+      document.getElementById('btn-save-invoice')!.classList.remove('hidden');
+      document.getElementById('btn-cancel-edit')!.classList.remove('hidden');
+
+      // Hide any previous feedback
+      document.getElementById('edit-feedback')!.classList.add('hidden');
+
+      // Replace Invoice Info display fields with inputs
+      replaceWithInput('detail-number', 'text', currentInvoice.invoice_number || '', 'Invoice number');
+      replaceWithInput('detail-currency', 'text', currentInvoice.currency || '', 'e.g. USD');
+      replaceWithInput('detail-invoice-date', 'date', currentInvoice.invoice_date || '');
+      replaceWithInput('detail-due-date', 'date', currentInvoice.due_date || '');
+
+      // Replace Totals display fields with inputs
+      replaceTotalWithInput('detail-subtotal', currentInvoice.subtotal);
+      replaceTotalWithInput('detail-tax', currentInvoice.tax);
+      replaceTotalWithInput('detail-total', currentInvoice.total);
+    }
+
+    function replaceWithInput(elementId: string, type: string, value: string, placeholder?: string) {
+      const el = document.getElementById(elementId)!;
+      const input = document.createElement('input');
+      input.type = type;
+      input.value = value;
+      input.className = 'input input-bordered input-sm w-full';
+      input.dataset.editField = elementId;
+      if (placeholder) input.placeholder = placeholder;
+      el.textContent = '';
+      el.appendChild(input);
+    }
+
+    function replaceTotalWithInput(elementId: string, value: number | null) {
+      const el = document.getElementById(elementId)!;
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.step = '0.01';
+      input.value = value !== null && value !== undefined ? String(value) : '';
+      input.className = 'input input-bordered input-sm w-full text-center';
+      input.dataset.editField = elementId;
+      el.textContent = '';
+      el.appendChild(input);
+    }
+
+    function exitEditMode() {
+      isEditMode = false;
+
+      // Show edit, hide save/cancel
+      document.getElementById('btn-edit-invoice')!.classList.remove('hidden');
+      document.getElementById('btn-save-invoice')!.classList.add('hidden');
+      document.getElementById('btn-cancel-edit')!.classList.add('hidden');
+
+      // Re-render invoice to restore display values
+      if (currentInvoice) {
+        renderInvoice(currentInvoice);
+      }
+    }
+
+    async function saveEdits() {
+      if (!currentInvoice) return;
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        window.location.href = '/login';
+        return;
+      }
+
+      // Collect values from inputs
+      const updates: Record<string, any> = {};
+
+      const numberInput = document.querySelector('[data-edit-field="detail-number"]') as HTMLInputElement;
+      const currencyInput = document.querySelector('[data-edit-field="detail-currency"]') as HTMLInputElement;
+      const invoiceDateInput = document.querySelector('[data-edit-field="detail-invoice-date"]') as HTMLInputElement;
+      const dueDateInput = document.querySelector('[data-edit-field="detail-due-date"]') as HTMLInputElement;
+      const subtotalInput = document.querySelector('[data-edit-field="detail-subtotal"]') as HTMLInputElement;
+      const taxInput = document.querySelector('[data-edit-field="detail-tax"]') as HTMLInputElement;
+      const totalInput = document.querySelector('[data-edit-field="detail-total"]') as HTMLInputElement;
+
+      if (numberInput) updates.invoice_number = numberInput.value || null;
+      if (currencyInput) updates.currency = currencyInput.value || null;
+      if (invoiceDateInput) updates.invoice_date = invoiceDateInput.value || null;
+      if (dueDateInput) updates.due_date = dueDateInput.value || null;
+      if (subtotalInput) updates.subtotal = subtotalInput.value ? parseFloat(subtotalInput.value) : null;
+      if (taxInput) updates.tax = taxInput.value ? parseFloat(taxInput.value) : null;
+      if (totalInput) updates.total = totalInput.value ? parseFloat(totalInput.value) : null;
+
+      // Show loading state on save button
+      const saveBtn = document.getElementById('btn-save-invoice') as HTMLButtonElement;
+      const cancelBtn = document.getElementById('btn-cancel-edit') as HTMLButtonElement;
+      saveBtn.disabled = true;
+      cancelBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+
+      try {
+        const res = await fetch(`${FUNCTIONS_URL}/approve-invoice`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            invoice_id: currentInvoice.id,
+            updates,
+          }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `Failed to save: ${res.status}`);
+        }
+
+        const result = await res.json();
+
+        // Update local invoice data with the edits
+        if (result.invoice) {
+          currentInvoice = result.invoice;
+        } else {
+          // Fallback: apply updates locally
+          Object.assign(currentInvoice, updates);
+        }
+
+        // Exit edit mode and re-render
+        isEditMode = false;
+        document.getElementById('btn-edit-invoice')!.classList.remove('hidden');
+        document.getElementById('btn-save-invoice')!.classList.add('hidden');
+        document.getElementById('btn-cancel-edit')!.classList.add('hidden');
+        renderInvoice(currentInvoice);
+
+        // Show success feedback
+        showEditFeedback('Changes saved successfully.', 'success');
+
+      } catch (err: any) {
+        showEditFeedback(err.message || 'Failed to save changes.', 'error');
+        saveBtn.disabled = false;
+        cancelBtn.disabled = false;
+        saveBtn.textContent = 'Save';
+      }
+    }
+
+    function showEditFeedback(message: string, type: 'success' | 'error') {
+      const feedbackEl = document.getElementById('edit-feedback')!;
+      feedbackEl.className = `alert ${type === 'success' ? 'alert-success' : 'alert-error'} mb-3 py-2 text-sm`;
+      feedbackEl.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-4 w-4" fill="none" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${type === 'success'
+            ? 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'
+            : 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z'}" />
+        </svg>
+        <span>${escapeHtml(message)}</span>
+      `;
+      feedbackEl.classList.remove('hidden');
+      if (type === 'success') {
+        setTimeout(() => { feedbackEl.classList.add('hidden'); }, 3000);
+      }
+    }
+
     // --- Actions ---
     let currentInvoice: Invoice | null = null;
 
@@ -825,6 +1133,37 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
       if (confirmed) await performAction('reject');
     });
 
+    // --- Comment event handlers ---
+    document.getElementById('comment-input')?.addEventListener('input', (e) => {
+      const textarea = e.target as HTMLTextAreaElement;
+      const sendBtn = document.getElementById('btn-send-comment') as HTMLButtonElement;
+      sendBtn.disabled = !textarea.value.trim();
+    });
+
+    document.getElementById('comment-input')?.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        sendComment();
+      }
+    });
+
+    document.getElementById('btn-send-comment')?.addEventListener('click', () => {
+      sendComment();
+    });
+
+    // --- Edit mode event handlers ---
+    document.getElementById('btn-edit-invoice')?.addEventListener('click', () => {
+      enterEditMode();
+    });
+
+    document.getElementById('btn-save-invoice')?.addEventListener('click', () => {
+      saveEdits();
+    });
+
+    document.getElementById('btn-cancel-edit')?.addEventListener('click', () => {
+      exitEditMode();
+    });
+
     // --- Initialize page ---
     async function init() {
       const invoiceId = getInvoiceIdFromUrl();
@@ -841,6 +1180,9 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
         currentInvoice = invoice;
         renderInvoice(invoice);
         showContent();
+
+        // Load comments in background
+        loadComments(invoiceId);
       } catch (err: any) {
         showError(err.message || 'Failed to load invoice data.');
       }
