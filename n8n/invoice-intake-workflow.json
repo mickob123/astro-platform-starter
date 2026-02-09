@@ -45,12 +45,16 @@
             {
               "name": "x-api-key",
               "value": "REPLACE_WITH_CUSTOMER_API_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer REPLACE_WITH_SUPABASE_ANON_KEY"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ email_subject: $json.subject, email_body: $json.snippet || $json.textPlain || '', attachment_text: $json.textPlain || null, metadata: { gmail_message_id: $json.id, gmail_thread_id: $json.threadId, from: $json.from, received_at: $json.date } }) }}",
+        "jsonBody": "={{ JSON.stringify({ email_subject: $json.Subject || $json.subject || '', email_body: $json.snippet || $json.textPlain || '', attachment_text: $json.textPlain || null, metadata: { gmail_message_id: $json.id, gmail_thread_id: $json.threadId, from: $json.From || $json.from, received_at: $json.date } }) }}",
         "options": {
           "timeout": 120000,
           "response": {
