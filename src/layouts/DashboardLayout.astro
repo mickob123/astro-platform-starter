@@ -34,8 +34,30 @@ const { title } = Astro.props;
           Invoice Dashboard
         </a>
       </div>
-      <div class="flex-none gap-2">
+      <div class="flex-none gap-2 items-center">
         <a href="/dashboard" class="btn btn-ghost btn-sm no-underline">Dashboard</a>
+
+        <!-- Notification Bell -->
+        <div class="dropdown dropdown-end" id="notification-dropdown">
+          <label tabindex="0" class="btn btn-ghost btn-sm btn-circle relative" id="notification-bell">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+            <span id="notification-badge" class="badge badge-error badge-xs absolute -top-1 -right-1 hidden"></span>
+          </label>
+          <div tabindex="0" class="dropdown-content z-[1] card card-compact w-72 bg-base-100 shadow-lg border border-base-200 mt-2">
+            <div class="card-body p-3">
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="font-semibold text-sm">Notifications</h3>
+                <button id="clear-notifications" class="btn btn-ghost btn-xs hidden">Clear</button>
+              </div>
+              <div id="notification-list">
+                <p class="text-sm opacity-50 py-2 text-center" id="no-notifications">No notifications</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <button id="logout-btn" class="btn btn-ghost btn-sm text-error">Logout</button>
       </div>
     </div>
@@ -49,6 +71,55 @@ const { title } = Astro.props;
       document.getElementById('logout-btn')?.addEventListener('click', async () => {
         await supabase.auth.signOut();
         window.location.href = '/login';
+      });
+
+      // Notification bell logic
+      const badge = document.getElementById('notification-badge')!;
+      const notificationList = document.getElementById('notification-list')!;
+      const noNotifications = document.getElementById('no-notifications')!;
+      const clearBtn = document.getElementById('clear-notifications')!;
+
+      function updateNotifications(failedCount: number) {
+        if (failedCount > 0) {
+          badge.textContent = String(failedCount);
+          badge.classList.remove('hidden');
+          clearBtn.classList.remove('hidden');
+          noNotifications.classList.add('hidden');
+          notificationList.innerHTML = `
+            <div id="notification-item" class="flex items-start gap-2 p-2 rounded-lg bg-error/10">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-error shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+              <div>
+                <p class="text-sm font-medium text-error">${failedCount} invoice${failedCount !== 1 ? 's' : ''} failed processing</p>
+                <p class="text-xs opacity-50 mt-0.5">Check the error status filter for details</p>
+              </div>
+            </div>
+          `;
+        } else {
+          badge.classList.add('hidden');
+          clearBtn.classList.add('hidden');
+          noNotifications.classList.remove('hidden');
+          notificationList.innerHTML = '';
+          notificationList.appendChild(noNotifications);
+        }
+      }
+
+      // Listen for notification updates from dashboard page
+      window.addEventListener('dashboard:notifications', ((e: CustomEvent) => {
+        updateNotifications(e.detail.failedCount || 0);
+      }) as EventListener);
+
+      // Clear button dismisses notifications visually
+      clearBtn.addEventListener('click', () => {
+        badge.classList.add('hidden');
+        clearBtn.classList.add('hidden');
+        notificationList.innerHTML = '';
+        const p = document.createElement('p');
+        p.className = 'text-sm opacity-50 py-2 text-center';
+        p.id = 'no-notifications';
+        p.textContent = 'No notifications';
+        notificationList.appendChild(p);
       });
     </script>
   </body>

@@ -4,11 +4,6 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
 ---
 
 <DashboardLayout title="Dashboard">
-  <!-- ===== Failed Processing Alert Banner ===== -->
-  <div id="failed-banner" class="alert alert-error mb-4 hidden">
-    <span>⚠ <strong id="failed-count">0</strong> invoices failed processing.</span>
-  </div>
-
   <!-- ===== Summary Stats Cards (4 cards) ===== -->
   <div id="stats-section" class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-2">
     <div class="card bg-base-100 shadow-sm">
@@ -263,9 +258,6 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   // ─── DOM Elements ─────────────────────────────────────────────────
-  const failedBanner = document.getElementById('failed-banner')!;
-  const failedCount = document.getElementById('failed-count')!;
-
   const statNeedsReview = document.getElementById('stat-needs-review')!;
   const statApproved = document.getElementById('stat-approved')!;
   const statAmountAwaiting = document.getElementById('stat-amount-awaiting')!;
@@ -502,15 +494,11 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     const totalInvoices = summary.total_invoices ?? 0;
     statTotalLine.textContent = `${totalInvoices} invoice${totalInvoices !== 1 ? 's' : ''} processed all-time`;
 
-    // Failed processing banner
+    // Notify the nav bell about failed processing count
     const failedProcessing = summary.failed_processing ?? 0;
-    if (failedProcessing > 0) {
-      failedCount.textContent = String(failedProcessing);
-      failedBanner.classList.remove('hidden');
-      failedBanner.style.display = '';
-    } else {
-      failedBanner.classList.add('hidden');
-    }
+    window.dispatchEvent(new CustomEvent('dashboard:notifications', {
+      detail: { failedCount: failedProcessing }
+    }));
 
     // Animate in
     document.getElementById('stats-section')?.classList.add('fade-in');
