@@ -23,32 +23,37 @@ set -e
 echo "=== Deploying Supabase Edge Functions ==="
 echo ""
 
-# --- Admin functions: WITH gateway JWT verification (defense-in-depth) ---
-echo "[1/8] Deploying admin-create-customer (JWT verified)..."
-supabase functions deploy admin-create-customer
+# --- Admin functions: function-level JWT + admin role auth ---
+# Deployed with --no-verify-jwt so the gateway doesn't block valid Supabase Auth tokens.
+# Each function verifies JWT + admin role itself via verifyJwt() + requireAdmin().
+echo "[1/9] Deploying admin-create-customer (JWT + admin auth)..."
+supabase functions deploy admin-create-customer --no-verify-jwt
 
-echo "[2/8] Deploying admin-list-customers (JWT verified)..."
-supabase functions deploy admin-list-customers
+echo "[2/9] Deploying admin-list-customers (JWT + admin auth)..."
+supabase functions deploy admin-list-customers --no-verify-jwt
 
-echo "[3/8] Deploying admin-get-dashboard (JWT verified)..."
-supabase functions deploy admin-get-dashboard
+echo "[3/9] Deploying admin-get-dashboard (JWT + admin auth)..."
+supabase functions deploy admin-get-dashboard --no-verify-jwt
+
+echo "[4/9] Deploying approve-invoice (JWT + admin auth)..."
+supabase functions deploy approve-invoice --no-verify-jwt
 
 # --- Processing functions: API key auth at function level ---
 # These use --no-verify-jwt because n8n calls them with API keys, not Supabase JWTs.
 # Each function verifies the API key itself and scopes all queries to the customer.
-echo "[4/8] Deploying process-invoice (API key auth)..."
+echo "[5/9] Deploying process-invoice (API key auth)..."
 supabase functions deploy process-invoice --no-verify-jwt
 
-echo "[5/8] Deploying classify-invoice (API key auth)..."
+echo "[6/9] Deploying classify-invoice (API key auth)..."
 supabase functions deploy classify-invoice --no-verify-jwt
 
-echo "[6/8] Deploying extract-invoice (API key auth)..."
+echo "[7/9] Deploying extract-invoice (API key auth)..."
 supabase functions deploy extract-invoice --no-verify-jwt
 
-echo "[7/8] Deploying validate-invoice (API key auth)..."
+echo "[8/9] Deploying validate-invoice (API key auth)..."
 supabase functions deploy validate-invoice --no-verify-jwt
 
-echo "[8/8] Deploying build-slack-payload (API key auth)..."
+echo "[9/9] Deploying build-slack-payload (API key auth)..."
 supabase functions deploy build-slack-payload --no-verify-jwt
 
 echo ""
