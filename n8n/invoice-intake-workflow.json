@@ -33,6 +33,16 @@
     },
     {
       "parameters": {
+        "jsCode": "// Prepare the request payload, including any PDF attachments as base64.\n// When Gmail downloads attachments, they appear as binary properties.\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const emailSubject = item.json.headers?.subject || item.json.Subject || item.json.subject || '';\n  const emailBody = item.json.textPlain || item.json.snippet || item.json.text || '';\n  const metadata = {\n    gmail_message_id: item.json.id,\n    gmail_thread_id: item.json.threadId,\n    from: item.json.headers?.from || item.json.From || item.json.from,\n    received_at: item.json.date,\n  };\n\n  let attachmentBase64 = null;\n\n  // Check all binary properties for PDF attachments\n  if (item.binary) {\n    for (const [key, binaryMeta] of Object.entries(item.binary)) {\n      const mime = binaryMeta.mimeType || '';\n      if (mime === 'application/pdf' || key.toLowerCase().endsWith('.pdf')) {\n        try {\n          const buffer = await this.helpers.getBinaryDataBuffer(items.indexOf(item), key);\n          attachmentBase64 = buffer.toString('base64');\n          break; // Use the first PDF attachment\n        } catch (err) {\n          console.log('Failed to read binary attachment:', key, err.message);\n        }\n      }\n    }\n  }\n\n  results.push({\n    json: {\n      email_subject: emailSubject,\n      email_body: emailBody,\n      attachment_base64: attachmentBase64,\n      metadata: metadata,\n    },\n  });\n}\n\nreturn results;"
+      },
+      "id": "prepare-payload",
+      "name": "Prepare Payload (Extract PDF)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "https://tcgptxbqqyxmvsaqiblc.supabase.co/functions/v1/process-invoice",
         "sendHeaders": true,
@@ -54,7 +64,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ email_subject: $json.Subject || $json.subject || '', email_body: $json.snippet || $json.textPlain || '', attachment_text: $json.textPlain || null, metadata: { gmail_message_id: $json.id, gmail_thread_id: $json.threadId, from: $json.From || $json.from, received_at: $json.date } }) }}",
+        "jsonBody": "={{ JSON.stringify({ email_subject: $json.email_subject, email_body: $json.email_body, attachment_base64: $json.attachment_base64, metadata: $json.metadata }) }}",
         "options": {
           "timeout": 120000,
           "response": {
@@ -68,7 +78,7 @@
       "name": "Process Invoice",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [500, 300]
+      "position": [750, 300]
     },
     {
       "parameters": {
@@ -97,7 +107,7 @@
       "name": "Success?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [750, 300]
+      "position": [1000, 300]
     },
     {
       "parameters": {
@@ -117,7 +127,7 @@
       "name": "Log Success",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [1000, 200]
+      "position": [1250, 200]
     },
     {
       "parameters": {
@@ -137,11 +147,22 @@
       "name": "Log Error",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [1000, 400]
+      "position": [1250, 400]
     }
   ],
   "connections": {
     "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Prepare Payload (Extract PDF)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Payload (Extract PDF)": {
       "main": [
         [
           {

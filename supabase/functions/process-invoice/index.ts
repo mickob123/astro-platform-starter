@@ -13,12 +13,31 @@
  *   - Processing log tracks every step (audit trail)
  *   - If a step fails mid-pipeline, the log records the failure point
  *     so invoices are never silently lost
+ *
+ * PDF support:
+ *   - Accepts base64-encoded PDF attachments via attachment_base64
+ *   - Extracts text using unpdf (pdfjs-serverless)
+ *   - Falls back to email_body if PDF extraction fails
  */
 
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { verifyApiKey, AuthError } from "../_shared/auth.ts";
 import { withRetry } from "../_shared/retry.ts";
 import OpenAI from "https://esm.sh/openai@4.52.0";
+import { extractText as extractPdfText } from "https://esm.sh/unpdf@0.12.1";
+
+/**
+ * Decode a base64-encoded PDF and extract its text content.
+ */
+async function pdfBase64ToText(base64Data: string): Promise<string> {
+  const binaryStr = atob(base64Data);
+  const bytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) {
+    bytes[i] = binaryStr.charCodeAt(i);
+  }
+  const { text } = await extractPdfText(bytes, { mergePages: true });
+  return text;
+}
 
 const CLASSIFY_PROMPT = `You are an invoice classification system. Analyze the provided email content and determine if it represents a real vendor invoice.
 
@@ -69,7 +88,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json();
-    const { email_subject, email_body, attachment_text, metadata } = body;
+    const { email_subject, email_body, attachment_text, attachment_base64, metadata } = body;
 
     if (!email_subject || !email_body) {
       return new Response(
@@ -78,9 +97,27 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // --- Extract text from PDF attachment if provided ---
+    // Priority: attachment_text (pre-extracted) > attachment_base64 (PDF to extract) > email_body
+    let resolvedAttachmentText = attachment_text || null;
+    if (!resolvedAttachmentText && attachment_base64) {
+      try {
+        // Limit base64 size to ~10MB PDF (base64 is ~33% larger than binary)
+        if (typeof attachment_base64 !== "string" || attachment_base64.length > 14_000_000) {
+          console.warn("attachment_base64 too large, skipping PDF extraction");
+        } else {
+          console.log("Extracting text from base64 PDF attachment...");
+          resolvedAttachmentText = await pdfBase64ToText(attachment_base64);
+          console.log(`PDF text extracted: ${resolvedAttachmentText.length} characters`);
+        }
+      } catch (pdfErr) {
+        console.error("PDF text extraction failed (will fall back to email body):", pdfErr);
+      }
+    }
+
     // Guard against oversized payloads that could cause excessive API costs
     const MAX_TEXT_LENGTH = 100_000; // ~100KB of text
-    const totalLength = (email_subject?.length || 0) + (email_body?.length || 0) + (attachment_text?.length || 0);
+    const totalLength = (email_subject?.length || 0) + (email_body?.length || 0) + (resolvedAttachmentText?.length || 0);
     if (totalLength > MAX_TEXT_LENGTH) {
       return new Response(
         JSON.stringify({ error: `Request body text exceeds maximum allowed length of ${MAX_TEXT_LENGTH} characters` }),
@@ -95,7 +132,12 @@ Deno.serve(async (req: Request) => {
         customer_id: customerId,
         status: "started",
         step: "classify",
-        input: { email_subject, email_body, attachment_text: attachment_text || null },
+        input: {
+          email_subject,
+          email_body,
+          attachment_text: resolvedAttachmentText || null,
+          had_pdf_attachment: !!attachment_base64,
+        },
       })
       .select("id")
       .single();
@@ -107,7 +149,7 @@ Deno.serve(async (req: Request) => {
     const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
 
     const userContent = `Email Subject: ${email_subject}\n\nEmail Body:\n${email_body}\n\n${
-      attachment_text ? `Attachment Content:\n${attachment_text}` : "No attachment content available."
+      resolvedAttachmentText ? `Attachment Content:\n${resolvedAttachmentText}` : "No attachment content available."
     }`;
 
     const classification = await withRetry(async () => {
@@ -160,7 +202,7 @@ Deno.serve(async (req: Request) => {
       .update({ step: "extract" })
       .eq("id", logId);
 
-    const documentText = attachment_text || email_body;
+    const documentText = resolvedAttachmentText || email_body;
     const extraction = await withRetry(async () => {
       const response = await openai.chat.completions.create({
         model: "gpt-4-turbo-preview",
