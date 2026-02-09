@@ -18,6 +18,7 @@
     "@fontsource/inter": "^5.0.18",
     "@netlify/blobs": "^8.1.1",
     "@netlify/functions": "^2.8.2",
+    "@supabase/supabase-js": "^2.95.3",
     "@types/react": "^18.2.79",
     "@types/react-dom": "^18.2.25",
     "astro": "^4.16.18",

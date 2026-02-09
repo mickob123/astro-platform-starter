@@ -1,0 +1,582 @@
+---
+export const prerender = false;
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+---
+
+<DashboardLayout title="Dashboard">
+  <!-- ===== Summary Stats Cards ===== -->
+  <div id="stats-section" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body p-4">
+        <p class="text-xs uppercase tracking-wide opacity-60 font-semibold">Total Invoices</p>
+        <p id="stat-total-invoices" class="text-2xl font-bold mt-1">
+          <span class="loading loading-dots loading-sm"></span>
+        </p>
+      </div>
+    </div>
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body p-4">
+        <p class="text-xs uppercase tracking-wide opacity-60 font-semibold">Pending Approval</p>
+        <p id="stat-pending" class="text-2xl font-bold mt-1 text-warning">
+          <span class="loading loading-dots loading-sm"></span>
+        </p>
+      </div>
+    </div>
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body p-4">
+        <p class="text-xs uppercase tracking-wide opacity-60 font-semibold">Flagged</p>
+        <p id="stat-flagged" class="text-2xl font-bold mt-1 text-orange-500">
+          <span class="loading loading-dots loading-sm"></span>
+        </p>
+      </div>
+    </div>
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body p-4">
+        <p class="text-xs uppercase tracking-wide opacity-60 font-semibold">Total Revenue</p>
+        <p id="stat-revenue" class="text-2xl font-bold mt-1 text-success">
+          <span class="loading loading-dots loading-sm"></span>
+        </p>
+      </div>
+    </div>
+    <div class="card bg-base-100 shadow-sm col-span-2 md:col-span-1">
+      <div class="card-body p-4">
+        <p class="text-xs uppercase tracking-wide opacity-60 font-semibold">Failed Processing</p>
+        <p id="stat-failed" class="text-2xl font-bold mt-1 text-error">
+          <span class="loading loading-dots loading-sm"></span>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Filters & Search Bar ===== -->
+  <div class="card bg-base-100 shadow-sm mb-6">
+    <div class="card-body p-4">
+      <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+        <!-- Search -->
+        <div class="form-control w-full sm:w-auto sm:flex-1">
+          <label class="label py-1">
+            <span class="label-text text-xs font-semibold uppercase tracking-wide opacity-60">Search</span>
+          </label>
+          <input
+            id="filter-search"
+            type="text"
+            placeholder="Search vendor or invoice #..."
+            class="input input-bordered input-sm w-full"
+          />
+        </div>
+
+        <!-- Status Filter -->
+        <div class="form-control w-full sm:w-48">
+          <label class="label py-1">
+            <span class="label-text text-xs font-semibold uppercase tracking-wide opacity-60">Status</span>
+          </label>
+          <select id="filter-status" class="select select-bordered select-sm w-full">
+            <option value="">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="flagged">Flagged</option>
+            <option value="rejected">Rejected</option>
+            <option value="synced">Synced</option>
+            <option value="error">Error</option>
+          </select>
+        </div>
+
+        <!-- Sort -->
+        <div class="form-control w-full sm:w-48">
+          <label class="label py-1">
+            <span class="label-text text-xs font-semibold uppercase tracking-wide opacity-60">Sort By</span>
+          </label>
+          <select id="filter-sort" class="select select-bordered select-sm w-full">
+            <option value="date-desc">Date (Newest)</option>
+            <option value="date-asc">Date (Oldest)</option>
+            <option value="amount-desc">Amount (High-Low)</option>
+            <option value="amount-asc">Amount (Low-High)</option>
+          </select>
+        </div>
+
+        <!-- Per-page limit -->
+        <div class="form-control w-full sm:w-32">
+          <label class="label py-1">
+            <span class="label-text text-xs font-semibold uppercase tracking-wide opacity-60">Per Page</span>
+          </label>
+          <select id="filter-limit" class="select select-bordered select-sm w-full">
+            <option value="10">10</option>
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Invoice Table ===== -->
+  <div class="card bg-base-100 shadow-sm">
+    <div class="card-body p-0">
+      <!-- Loading state -->
+      <div id="table-loading" class="flex flex-col items-center justify-center py-16">
+        <span class="loading loading-spinner loading-lg text-primary"></span>
+        <p class="mt-3 text-sm opacity-60">Loading invoices...</p>
+      </div>
+
+      <!-- Error state -->
+      <div id="table-error" class="hidden flex-col items-center justify-center py-16 px-4 text-center">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-error mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+        </svg>
+        <p class="font-semibold text-error">Failed to load invoices</p>
+        <p id="table-error-message" class="text-sm opacity-60 mt-1"></p>
+        <button id="retry-btn" class="btn btn-sm btn-primary mt-4 no-underline">Retry</button>
+      </div>
+
+      <!-- Empty state -->
+      <div id="table-empty" class="hidden flex-col items-center justify-center py-16 px-4 text-center">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 opacity-30 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <p class="font-semibold">No invoices found</p>
+        <p class="text-sm opacity-60 mt-1">Try adjusting your filters or search term.</p>
+      </div>
+
+      <!-- Table -->
+      <div id="table-container" class="hidden overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr class="border-b border-base-200">
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Invoice #</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Vendor</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Amount</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden sm:table-cell">Date</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden md:table-cell">Due Date</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Status</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden lg:table-cell">Confidence</th>
+            </tr>
+          </thead>
+          <tbody id="invoice-table-body">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Pagination ===== -->
+  <div id="pagination-section" class="hidden mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+    <p id="pagination-info" class="text-sm opacity-60"></p>
+    <div class="join">
+      <button id="page-prev" class="join-item btn btn-sm no-underline" disabled>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+        Prev
+      </button>
+      <div id="page-numbers" class="join-item flex">
+        <!-- Page buttons injected by JS -->
+      </div>
+      <button id="page-next" class="join-item btn btn-sm no-underline">
+        Next
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+    </div>
+  </div>
+</DashboardLayout>
+
+<style>
+  /* Make table rows clickable-looking */
+  #invoice-table-body tr {
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+  }
+  #invoice-table-body tr:hover {
+    background-color: oklch(var(--b2));
+  }
+  /* Remove default anchor underline from rows */
+  #invoice-table-body tr a {
+    text-decoration: none;
+  }
+  /* Smooth fade-in for content */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .fade-in {
+    animation: fadeIn 0.3s ease forwards;
+  }
+</style>
+
+<script>
+  import { supabase } from '../lib/supabase';
+
+  // ─── Constants & Config ───────────────────────────────────────────
+  const API_BASE = 'https://tcgptxbqqyxmvsaqiblc.supabase.co/functions/v1/admin-get-dashboard';
+
+  // ─── State ────────────────────────────────────────────────────────
+  let currentPage = 1;
+  let currentLimit = 25;
+  let currentStatus = '';
+  let currentSort = 'date-desc';
+  let currentSearch = '';
+  let allInvoices: any[] = [];
+  let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // ─── DOM Elements ─────────────────────────────────────────────────
+  const statTotalInvoices = document.getElementById('stat-total-invoices')!;
+  const statPending = document.getElementById('stat-pending')!;
+  const statFlagged = document.getElementById('stat-flagged')!;
+  const statRevenue = document.getElementById('stat-revenue')!;
+  const statFailed = document.getElementById('stat-failed')!;
+
+  const filterSearch = document.getElementById('filter-search') as HTMLInputElement;
+  const filterStatus = document.getElementById('filter-status') as HTMLSelectElement;
+  const filterSort = document.getElementById('filter-sort') as HTMLSelectElement;
+  const filterLimit = document.getElementById('filter-limit') as HTMLSelectElement;
+
+  const tableLoading = document.getElementById('table-loading')!;
+  const tableError = document.getElementById('table-error')!;
+  const tableErrorMessage = document.getElementById('table-error-message')!;
+  const tableEmpty = document.getElementById('table-empty')!;
+  const tableContainer = document.getElementById('table-container')!;
+  const tableBody = document.getElementById('invoice-table-body')!;
+  const retryBtn = document.getElementById('retry-btn')!;
+
+  const paginationSection = document.getElementById('pagination-section')!;
+  const paginationInfo = document.getElementById('pagination-info')!;
+  const pageNumbers = document.getElementById('page-numbers')!;
+  const pagePrev = document.getElementById('page-prev') as HTMLButtonElement;
+  const pageNext = document.getElementById('page-next') as HTMLButtonElement;
+
+  // ─── Formatters ───────────────────────────────────────────────────
+  const currencyFormatter = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  const dateFormatter = new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
+  function formatDate(dateStr: string | null): string {
+    if (!dateStr) return '--';
+    try {
+      return dateFormatter.format(new Date(dateStr));
+    } catch {
+      return dateStr;
+    }
+  }
+
+  function formatCurrency(amount: number | null | undefined): string {
+    if (amount == null) return '--';
+    return currencyFormatter.format(amount);
+  }
+
+  function formatConfidence(confidence: number | null | undefined): { text: string; class: string } {
+    if (confidence == null) return { text: '--', class: 'opacity-40' };
+    const pct = Math.round(confidence * 100);
+    if (pct >= 90) return { text: `${pct}%`, class: 'text-success font-semibold' };
+    if (pct >= 70) return { text: `${pct}%`, class: 'text-warning font-semibold' };
+    return { text: `${pct}%`, class: 'text-error font-semibold' };
+  }
+
+  // ─── Status Badge ─────────────────────────────────────────────────
+  function getStatusBadge(status: string): string {
+    const map: Record<string, { class: string; label: string }> = {
+      pending:  { class: 'badge-warning',           label: 'Pending' },
+      approved: { class: 'badge-success',            label: 'Approved' },
+      flagged:  { class: 'badge-warning text-orange-700 bg-orange-100 border-orange-300', label: 'Flagged' },
+      rejected: { class: 'badge-error',              label: 'Rejected' },
+      synced:   { class: 'badge-info',               label: 'Synced' },
+      error:    { class: 'badge-error',              label: 'Error' },
+    };
+    const info = map[status] || { class: 'badge-ghost', label: status };
+    return `<span class="badge badge-sm ${info.class} gap-1">${info.label}</span>`;
+  }
+
+  // ─── API Fetch ────────────────────────────────────────────────────
+  async function getAuthToken(): Promise<string | null> {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token ?? null;
+  }
+
+  async function fetchDashboard(): Promise<any> {
+    const token = await getAuthToken();
+    if (!token) {
+      window.location.href = '/login';
+      throw new Error('Not authenticated');
+    }
+
+    const params = new URLSearchParams();
+    params.set('page', String(currentPage));
+    params.set('limit', String(currentLimit));
+    if (currentStatus) params.set('status', currentStatus);
+
+    const url = `${API_BASE}?${params.toString()}`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`API error ${response.status}: ${errorBody}`);
+    }
+
+    return response.json();
+  }
+
+  // ─── Client-Side Sorting & Filtering ──────────────────────────────
+  function applyClientFilters(invoices: any[]): any[] {
+    let filtered = [...invoices];
+
+    // Search filter (client-side, across vendor_id and invoice_number)
+    if (currentSearch.trim()) {
+      const term = currentSearch.trim().toLowerCase();
+      filtered = filtered.filter((inv) => {
+        const invoiceNum = (inv.invoice_number || '').toLowerCase();
+        const vendorId = (inv.vendor_id || '').toLowerCase();
+        const vendorName = (inv.vendor_name || '').toLowerCase();
+        return invoiceNum.includes(term) || vendorId.includes(term) || vendorName.includes(term);
+      });
+    }
+
+    // Sort
+    filtered.sort((a, b) => {
+      switch (currentSort) {
+        case 'date-asc':
+          return new Date(a.invoice_date || 0).getTime() - new Date(b.invoice_date || 0).getTime();
+        case 'date-desc':
+          return new Date(b.invoice_date || 0).getTime() - new Date(a.invoice_date || 0).getTime();
+        case 'amount-asc':
+          return (a.total || 0) - (b.total || 0);
+        case 'amount-desc':
+          return (b.total || 0) - (a.total || 0);
+        default:
+          return 0;
+      }
+    });
+
+    return filtered;
+  }
+
+  // ─── Render Functions ─────────────────────────────────────────────
+  function renderStats(summary: any) {
+    statTotalInvoices.textContent = String(summary.total_invoices ?? 0);
+    statPending.textContent = String(summary.pending_approval ?? 0);
+    statFlagged.textContent = String(summary.flagged ?? 0);
+    statRevenue.textContent = formatCurrency(summary.total_revenue);
+    statFailed.textContent = String(summary.failed_processing ?? 0);
+
+    // Animate in
+    document.getElementById('stats-section')?.classList.add('fade-in');
+  }
+
+  function renderTable(invoices: any[]) {
+    const filtered = applyClientFilters(invoices);
+
+    // Show/hide states
+    tableLoading.classList.add('hidden');
+    tableError.classList.add('hidden');
+    tableError.style.display = 'none';
+
+    if (filtered.length === 0) {
+      tableEmpty.classList.remove('hidden');
+      tableEmpty.style.display = 'flex';
+      tableContainer.classList.add('hidden');
+      return;
+    }
+
+    tableEmpty.classList.add('hidden');
+    tableEmpty.style.display = 'none';
+    tableContainer.classList.remove('hidden');
+    tableContainer.classList.add('fade-in');
+
+    tableBody.innerHTML = filtered
+      .map((inv) => {
+        const conf = formatConfidence(inv.confidence);
+        const vendorDisplay = inv.vendor_name || inv.vendor_id?.substring(0, 8) || '--';
+        return `
+          <tr onclick="window.location.href='/invoice/${inv.id}'" class="border-b border-base-200/50">
+            <td class="font-mono text-sm font-medium">${escapeHtml(inv.invoice_number || '--')}</td>
+            <td class="max-w-[200px] truncate">${escapeHtml(vendorDisplay)}</td>
+            <td class="font-mono font-medium">${formatCurrency(inv.total)}</td>
+            <td class="hidden sm:table-cell text-sm">${formatDate(inv.invoice_date)}</td>
+            <td class="hidden md:table-cell text-sm">${formatDate(inv.due_date)}</td>
+            <td>${getStatusBadge(inv.status || 'pending')}</td>
+            <td class="hidden lg:table-cell"><span class="${conf.class}">${conf.text}</span></td>
+          </tr>
+        `;
+      })
+      .join('');
+  }
+
+  function renderPagination(pagination: any) {
+    if (!pagination || pagination.total_pages <= 1) {
+      paginationSection.classList.add('hidden');
+      return;
+    }
+
+    paginationSection.classList.remove('hidden');
+    paginationSection.style.display = 'flex';
+
+    const { page, limit, total, total_pages } = pagination;
+    const start = (page - 1) * limit + 1;
+    const end = Math.min(page * limit, total);
+
+    paginationInfo.textContent = `Showing ${start}-${end} of ${total} invoices`;
+
+    // Prev/Next buttons
+    pagePrev.disabled = page <= 1;
+    pageNext.disabled = page >= total_pages;
+
+    // Generate page number buttons
+    const pages = generatePageNumbers(page, total_pages);
+    pageNumbers.innerHTML = pages
+      .map((p) => {
+        if (p === '...') {
+          return `<button class="join-item btn btn-sm btn-disabled no-underline" disabled>...</button>`;
+        }
+        const isActive = p === page;
+        return `<button class="join-item btn btn-sm no-underline ${isActive ? 'btn-active' : ''}" data-page="${p}">${p}</button>`;
+      })
+      .join('');
+
+    // Attach page number click handlers
+    pageNumbers.querySelectorAll('button[data-page]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const targetPage = parseInt((btn as HTMLElement).dataset.page || '1', 10);
+        if (targetPage !== currentPage) {
+          currentPage = targetPage;
+          loadDashboard();
+        }
+      });
+    });
+  }
+
+  function generatePageNumbers(current: number, total: number): (number | string)[] {
+    if (total <= 7) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+
+    const pages: (number | string)[] = [1];
+
+    if (current > 3) pages.push('...');
+
+    const rangeStart = Math.max(2, current - 1);
+    const rangeEnd = Math.min(total - 1, current + 1);
+
+    for (let i = rangeStart; i <= rangeEnd; i++) {
+      pages.push(i);
+    }
+
+    if (current < total - 2) pages.push('...');
+
+    pages.push(total);
+
+    return pages;
+  }
+
+  function showError(message: string) {
+    tableLoading.classList.add('hidden');
+    tableContainer.classList.add('hidden');
+    tableEmpty.classList.add('hidden');
+    tableEmpty.style.display = 'none';
+    tableError.classList.remove('hidden');
+    tableError.style.display = 'flex';
+    tableErrorMessage.textContent = message;
+  }
+
+  function showLoading() {
+    tableLoading.classList.remove('hidden');
+    tableLoading.style.display = 'flex';
+    tableError.classList.add('hidden');
+    tableError.style.display = 'none';
+    tableEmpty.classList.add('hidden');
+    tableEmpty.style.display = 'none';
+    tableContainer.classList.add('hidden');
+  }
+
+  function escapeHtml(str: string): string {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // ─── Main Load Function ───────────────────────────────────────────
+  async function loadDashboard() {
+    showLoading();
+
+    try {
+      const data = await fetchDashboard();
+
+      renderStats(data.summary);
+
+      allInvoices = data.invoices || [];
+      renderTable(allInvoices);
+      renderPagination(data.pagination);
+    } catch (err: any) {
+      console.error('Dashboard load error:', err);
+      showError(err.message || 'An unexpected error occurred.');
+    }
+  }
+
+  // ─── Event Listeners ─────────────────────────────────────────────
+  // Status filter -> triggers API call (server-side filter)
+  filterStatus.addEventListener('change', () => {
+    currentStatus = filterStatus.value;
+    currentPage = 1;
+    loadDashboard();
+  });
+
+  // Per-page limit -> triggers API call
+  filterLimit.addEventListener('change', () => {
+    currentLimit = parseInt(filterLimit.value, 10);
+    currentPage = 1;
+    loadDashboard();
+  });
+
+  // Search -> client-side filter with debounce
+  filterSearch.addEventListener('input', () => {
+    if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+      currentSearch = filterSearch.value;
+      renderTable(allInvoices);
+    }, 250);
+  });
+
+  // Sort -> client-side re-sort
+  filterSort.addEventListener('change', () => {
+    currentSort = filterSort.value;
+    renderTable(allInvoices);
+  });
+
+  // Pagination prev/next
+  pagePrev.addEventListener('click', () => {
+    if (currentPage > 1) {
+      currentPage--;
+      loadDashboard();
+    }
+  });
+
+  pageNext.addEventListener('click', () => {
+    currentPage++;
+    loadDashboard();
+  });
+
+  // Retry on error
+  retryBtn.addEventListener('click', () => {
+    loadDashboard();
+  });
+
+  // ─── Initial Load ────────────────────────────────────────────────
+  loadDashboard();
+</script>
+</DashboardLayout>

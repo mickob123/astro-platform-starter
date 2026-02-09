@@ -1,0 +1,1 @@
+-- Already applied remotely. Stub for migration tracking.
