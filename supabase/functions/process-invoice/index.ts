@@ -216,7 +216,10 @@ Deno.serve(async (req: Request) => {
     // Upsert vendor (normalized_name for deduplication)
     const vendorName = extraction.vendor_name || classification.vendor_name || "Unknown Vendor";
     const normalizedName = vendorName.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-");
-    const { data: vendorData } = await supabase
+    let vendorId: string | null = null;
+
+    // Try upsert first
+    const { data: vendorData, error: vendorError } = await supabase
       .from("vendors")
       .upsert(
         {
@@ -229,12 +232,26 @@ Deno.serve(async (req: Request) => {
       .select("id")
       .single();
 
+    if (vendorError) {
+      console.error("Vendor upsert failed, trying lookup:", vendorError.message);
+      // Fallback: try to find existing vendor by normalized name
+      const { data: existingVendor } = await supabase
+        .from("vendors")
+        .select("id")
+        .eq("customer_id", customerId)
+        .eq("normalized_name", normalizedName)
+        .single();
+      vendorId = existingVendor?.id || null;
+    } else {
+      vendorId = vendorData?.id || null;
+    }
+
     // Insert invoice record — matches actual invoices table schema
     const { data: invoiceData, error: invoiceError } = await supabase
       .from("invoices")
       .insert({
         customer_id: customerId,
-        vendor_id: vendorData?.id,
+        vendor_id: vendorId,
         invoice_number: extraction.invoice_number,
         invoice_date: extraction.invoice_date,
         due_date: extraction.due_date,
