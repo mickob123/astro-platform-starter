@@ -4,48 +4,56 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
 ---
 
 <DashboardLayout title="Dashboard">
-  <!-- ===== Summary Stats Cards ===== -->
-  <div id="stats-section" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+  <!-- ===== Failed Processing Alert Banner ===== -->
+  <div id="failed-banner" class="alert alert-error mb-4 hidden">
+    <span>⚠ <strong id="failed-count">0</strong> invoices failed processing.</span>
+  </div>
+
+  <!-- ===== Summary Stats Cards (4 cards) ===== -->
+  <div id="stats-section" class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-2">
     <div class="card bg-base-100 shadow-sm">
       <div class="card-body p-4">
-        <p class="text-xs uppercase tracking-wide opacity-60 font-semibold">Total Invoices</p>
-        <p id="stat-total-invoices" class="text-2xl font-bold mt-1">
-          <span class="loading loading-dots loading-sm"></span>
-        </p>
-      </div>
-    </div>
-    <div class="card bg-base-100 shadow-sm">
-      <div class="card-body p-4">
-        <p class="text-xs uppercase tracking-wide opacity-60 font-semibold">Pending Approval</p>
-        <p id="stat-pending" class="text-2xl font-bold mt-1 text-warning">
+        <p class="text-xs uppercase tracking-wide opacity-60 font-semibold">Needs Review</p>
+        <p id="stat-needs-review" class="text-2xl font-bold mt-1 text-warning">
           <span class="loading loading-dots loading-sm"></span>
         </p>
       </div>
     </div>
     <div class="card bg-base-100 shadow-sm">
       <div class="card-body p-4">
-        <p class="text-xs uppercase tracking-wide opacity-60 font-semibold">Flagged</p>
-        <p id="stat-flagged" class="text-2xl font-bold mt-1 text-orange-500">
+        <p class="text-xs uppercase tracking-wide opacity-60 font-semibold">Approved</p>
+        <p id="stat-approved" class="text-2xl font-bold mt-1 text-success">
           <span class="loading loading-dots loading-sm"></span>
         </p>
       </div>
     </div>
     <div class="card bg-base-100 shadow-sm">
       <div class="card-body p-4">
-        <p class="text-xs uppercase tracking-wide opacity-60 font-semibold">Total Outstanding</p>
-        <p id="stat-revenue" class="text-2xl font-bold mt-1 text-info">
+        <p class="text-xs uppercase tracking-wide opacity-60 font-semibold">Amount Awaiting Approval</p>
+        <p id="stat-amount-awaiting" class="text-2xl font-bold mt-1 text-info">
           <span class="loading loading-dots loading-sm"></span>
         </p>
       </div>
     </div>
-    <div class="card bg-base-100 shadow-sm col-span-2 md:col-span-1">
+    <div class="card bg-base-100 shadow-sm">
       <div class="card-body p-4">
-        <p class="text-xs uppercase tracking-wide opacity-60 font-semibold">Failed Processing</p>
-        <p id="stat-failed" class="text-2xl font-bold mt-1 text-error">
+        <p class="text-xs uppercase tracking-wide opacity-60 font-semibold">Amount Approved</p>
+        <p id="stat-amount-approved" class="text-2xl font-bold mt-1 text-success">
           <span class="loading loading-dots loading-sm"></span>
         </p>
       </div>
     </div>
+  </div>
+
+  <!-- ===== All-time total line ===== -->
+  <p id="stat-total-line" class="text-sm opacity-50 mt-2 mb-4 text-center"></p>
+
+  <!-- ===== Time Range Preset Buttons ===== -->
+  <div class="flex gap-2 mb-4" id="time-range-buttons">
+    <button class="btn btn-sm" data-range="today">Today</button>
+    <button class="btn btn-sm" data-range="week">This Week</button>
+    <button class="btn btn-sm" data-range="month">This Month</button>
+    <button class="btn btn-sm btn-active" data-range="all">All Time</button>
   </div>
 
   <!-- ===== Filters & Search Bar ===== -->
@@ -106,6 +114,12 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
             <option value="100">100</option>
           </select>
         </div>
+
+        <!-- Vendor Group Toggle -->
+        <button id="toggle-vendor-group" class="btn btn-sm btn-outline">Group by Vendor</button>
+
+        <!-- Export CSV -->
+        <button id="export-csv" class="btn btn-sm btn-outline">Export CSV</button>
       </div>
     </div>
   </div>
@@ -143,6 +157,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
         <table class="table table-sm">
           <thead>
             <tr class="border-b border-base-200">
+              <th class="w-10"><input type="checkbox" id="select-all" class="checkbox checkbox-sm" /></th>
               <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Invoice #</th>
               <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Vendor</th>
               <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Amount</th>
@@ -150,6 +165,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
               <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden md:table-cell">Due Date</th>
               <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Status</th>
               <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden lg:table-cell">Confidence</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Actions</th>
             </tr>
           </thead>
           <tbody id="invoice-table-body">
@@ -158,6 +174,14 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
         </table>
       </div>
     </div>
+  </div>
+
+  <!-- ===== Bulk Actions Bar ===== -->
+  <div id="bulk-actions" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 bg-base-300 rounded-box shadow-xl p-3 flex items-center gap-3 z-50">
+    <span id="bulk-count">0 selected</span>
+    <button id="bulk-approve" class="btn btn-sm btn-success">Approve Selected</button>
+    <button id="bulk-reject" class="btn btn-sm btn-error">Reject Selected</button>
+    <button id="bulk-cancel" class="btn btn-sm btn-ghost">Cancel</button>
   </div>
 
   <!-- ===== Pagination ===== -->
@@ -181,6 +205,14 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
       </button>
     </div>
   </div>
+
+  <!-- ===== Activity Feed ===== -->
+  <details class="collapse collapse-arrow bg-base-100 shadow-sm mt-6">
+    <summary class="collapse-title text-sm font-semibold">Recent Activity</summary>
+    <div class="collapse-content" id="activity-feed">
+      <p class="text-sm opacity-50 py-2">Activity feed coming soon.</p>
+    </div>
+  </details>
 </DashboardLayout>
 
 <style>
@@ -191,6 +223,10 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   }
   #invoice-table-body tr:hover {
     background-color: oklch(var(--b2));
+  }
+  /* Vendor group header rows should not look clickable */
+  #invoice-table-body tr.vendor-group-header {
+    cursor: default;
   }
   /* Remove default anchor underline from rows */
   #invoice-table-body tr a {
@@ -210,7 +246,9 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   import { supabase } from '../lib/supabase';
 
   // ─── Constants & Config ───────────────────────────────────────────
-  const API_BASE = 'https://tcgptxbqqyxmvsaqiblc.supabase.co/functions/v1/admin-get-dashboard';
+  const FUNCTIONS_URL = 'https://tcgptxbqqyxmvsaqiblc.supabase.co/functions/v1';
+  const API_BASE = `${FUNCTIONS_URL}/admin-get-dashboard`;
+  const APPROVE_URL = `${FUNCTIONS_URL}/approve-invoice`;
 
   // ─── State ────────────────────────────────────────────────────────
   let currentPage = 1;
@@ -218,15 +256,21 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   let currentStatus = '';
   let currentSort = 'date-desc';
   let currentSearch = '';
+  let currentDateFrom = '';
   let allInvoices: any[] = [];
+  let selectedInvoices: Set<string> = new Set();
+  let vendorGroupMode = false;
   let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   // ─── DOM Elements ─────────────────────────────────────────────────
-  const statTotalInvoices = document.getElementById('stat-total-invoices')!;
-  const statPending = document.getElementById('stat-pending')!;
-  const statFlagged = document.getElementById('stat-flagged')!;
-  const statRevenue = document.getElementById('stat-revenue')!;
-  const statFailed = document.getElementById('stat-failed')!;
+  const failedBanner = document.getElementById('failed-banner')!;
+  const failedCount = document.getElementById('failed-count')!;
+
+  const statNeedsReview = document.getElementById('stat-needs-review')!;
+  const statApproved = document.getElementById('stat-approved')!;
+  const statAmountAwaiting = document.getElementById('stat-amount-awaiting')!;
+  const statAmountApproved = document.getElementById('stat-amount-approved')!;
+  const statTotalLine = document.getElementById('stat-total-line')!;
 
   const filterSearch = document.getElementById('filter-search') as HTMLInputElement;
   const filterStatus = document.getElementById('filter-status') as HTMLSelectElement;
@@ -246,6 +290,18 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   const pageNumbers = document.getElementById('page-numbers')!;
   const pagePrev = document.getElementById('page-prev') as HTMLButtonElement;
   const pageNext = document.getElementById('page-next') as HTMLButtonElement;
+
+  const selectAllCheckbox = document.getElementById('select-all') as HTMLInputElement;
+  const bulkActions = document.getElementById('bulk-actions')!;
+  const bulkCountEl = document.getElementById('bulk-count')!;
+  const bulkApproveBtn = document.getElementById('bulk-approve')!;
+  const bulkRejectBtn = document.getElementById('bulk-reject')!;
+  const bulkCancelBtn = document.getElementById('bulk-cancel')!;
+
+  const exportCsvBtn = document.getElementById('export-csv')!;
+  const toggleVendorGroupBtn = document.getElementById('toggle-vendor-group')!;
+
+  const timeRangeButtons = document.getElementById('time-range-buttons')!;
 
   // ─── Formatters ───────────────────────────────────────────────────
   const currencyFormatter = new Intl.NumberFormat('en-US', {
@@ -285,24 +341,26 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
 
   // ─── Status Badge ─────────────────────────────────────────────────
   function getStatusBadge(status: string): string {
-    const map: Record<string, { class: string; label: string }> = {
-      pending:  { class: 'badge-warning',           label: 'Pending' },
-      approved: { class: 'badge-success',            label: 'Approved' },
-      flagged:  { class: 'badge-warning text-orange-700 bg-orange-100 border-orange-300', label: 'Flagged' },
-      rejected: { class: 'badge-error',              label: 'Rejected' },
-      synced:   { class: 'badge-info',               label: 'Synced' },
-      error:    { class: 'badge-error',              label: 'Error' },
+    const map: Record<string, { class: string; label: string; icon?: string }> = {
+      pending:  { class: 'badge-warning',  label: 'Pending' },
+      approved: { class: 'badge-success',  label: 'Approved' },
+      flagged:  { class: 'badge-error',    label: 'Flagged', icon: '\u26A0' },
+      rejected: { class: 'badge-error',    label: 'Rejected' },
+      synced:   { class: 'badge-info',     label: 'Synced' },
+      error:    { class: 'badge-error',    label: 'Error' },
     };
     const info = map[status] || { class: 'badge-ghost', label: status };
-    return `<span class="badge badge-sm ${info.class} gap-1">${info.label}</span>`;
+    const iconHtml = info.icon ? `${info.icon} ` : '';
+    return `<span class="badge badge-sm ${info.class} gap-1">${iconHtml}${info.label}</span>`;
   }
 
-  // ─── API Fetch ────────────────────────────────────────────────────
+  // ─── Auth ──────────────────────────────────────────────────────────
   async function getAuthToken(): Promise<string | null> {
     const { data: { session } } = await supabase.auth.getSession();
     return session?.access_token ?? null;
   }
 
+  // ─── API Fetch ────────────────────────────────────────────────────
   async function fetchDashboard(): Promise<any> {
     const token = await getAuthToken();
     if (!token) {
@@ -314,6 +372,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     params.set('page', String(currentPage));
     params.set('limit', String(currentLimit));
     if (currentStatus) params.set('status', currentStatus);
+    if (currentDateFrom) params.set('date_from', currentDateFrom);
 
     const url = `${API_BASE}?${params.toString()}`;
 
@@ -333,6 +392,40 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     return response.json();
   }
 
+  // ─── Approve/Reject API ───────────────────────────────────────────
+  async function callApproveEndpoint(invoiceId: string, action: 'approve' | 'reject'): Promise<void> {
+    const token = await getAuthToken();
+    if (!token) {
+      window.location.href = '/login';
+      throw new Error('Not authenticated');
+    }
+
+    const response = await fetch(APPROVE_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ invoice_id: invoiceId, action }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`Approve API error ${response.status}: ${errorBody}`);
+    }
+  }
+
+  // ─── Quick Action (single row approve/reject) ─────────────────────
+  (window as any).quickAction = async function(invoiceId: string, action: 'approve' | 'reject') {
+    try {
+      await callApproveEndpoint(invoiceId, action);
+      await loadDashboard();
+    } catch (err: any) {
+      console.error('Quick action error:', err);
+      alert(`Failed to ${action} invoice: ${err.message}`);
+    }
+  };
+
   // ─── Client-Side Sorting & Filtering ──────────────────────────────
   function applyClientFilters(invoices: any[]): any[] {
     let filtered = [...invoices];
@@ -343,7 +436,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
       filtered = filtered.filter((inv) => {
         const invoiceNum = (inv.invoice_number || '').toLowerCase();
         const vendorId = (inv.vendor_id || '').toLowerCase();
-        const vendorName = (inv.vendor_name || '').toLowerCase();
+        const vendorName = (inv.vendor_name || inv.vendors?.name || '').toLowerCase();
         return invoiceNum.includes(term) || vendorId.includes(term) || vendorName.includes(term);
       });
     }
@@ -367,16 +460,88 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     return filtered;
   }
 
+  // ─── Checkbox / Bulk Selection Helpers ─────────────────────────────
+  function updateBulkUI() {
+    const count = selectedInvoices.size;
+    if (count > 0) {
+      bulkActions.classList.remove('hidden');
+      bulkActions.style.display = 'flex';
+      bulkCountEl.textContent = `${count} selected`;
+    } else {
+      bulkActions.classList.add('hidden');
+      bulkActions.style.display = '';
+    }
+  }
+
+  function bindCheckboxEvents() {
+    const checkboxes = tableBody.querySelectorAll<HTMLInputElement>('.row-checkbox');
+    checkboxes.forEach((cb) => {
+      cb.addEventListener('change', (e) => {
+        e.stopPropagation();
+        const id = cb.dataset.invoiceId!;
+        if (cb.checked) {
+          selectedInvoices.add(id);
+        } else {
+          selectedInvoices.delete(id);
+        }
+        // Update select-all state
+        selectAllCheckbox.checked = checkboxes.length > 0 && selectedInvoices.size === checkboxes.length;
+        updateBulkUI();
+      });
+    });
+  }
+
   // ─── Render Functions ─────────────────────────────────────────────
   function renderStats(summary: any) {
-    statTotalInvoices.textContent = String(summary.total_invoices ?? 0);
-    statPending.textContent = String(summary.pending_approval ?? 0);
-    statFlagged.textContent = String(summary.flagged ?? 0);
-    statRevenue.textContent = formatCurrency(summary.total_revenue);
-    statFailed.textContent = String(summary.failed_processing ?? 0);
+    statNeedsReview.textContent = String(summary.needs_review ?? 0);
+    statApproved.textContent = String(summary.approved ?? 0);
+    statAmountAwaiting.textContent = formatCurrency(summary.amount_awaiting_approval);
+    statAmountApproved.textContent = formatCurrency(summary.amount_approved);
+
+    // All-time total line
+    const totalInvoices = summary.total_invoices ?? 0;
+    statTotalLine.textContent = `${totalInvoices} invoice${totalInvoices !== 1 ? 's' : ''} processed all-time`;
+
+    // Failed processing banner
+    const failedProcessing = summary.failed_processing ?? 0;
+    if (failedProcessing > 0) {
+      failedCount.textContent = String(failedProcessing);
+      failedBanner.classList.remove('hidden');
+      failedBanner.style.display = '';
+    } else {
+      failedBanner.classList.add('hidden');
+    }
 
     // Animate in
     document.getElementById('stats-section')?.classList.add('fade-in');
+  }
+
+  function buildInvoiceRow(inv: any): string {
+    const conf = formatConfidence(inv.confidence);
+    const vendorDisplay = inv.vendors?.name || inv.vendor_name || '--';
+    const isPendingOrFlagged = inv.status === 'pending' || inv.status === 'flagged';
+    const isChecked = selectedInvoices.has(inv.id) ? 'checked' : '';
+
+    const actionsHtml = isPendingOrFlagged
+      ? `<td class="flex gap-1">
+           <button onclick="event.stopPropagation(); quickAction('${inv.id}', 'approve')" class="btn btn-xs btn-success btn-outline" title="Approve">\u2713</button>
+           <button onclick="event.stopPropagation(); quickAction('${inv.id}', 'reject')" class="btn btn-xs btn-error btn-outline" title="Reject">\u2717</button>
+         </td>`
+      : `<td></td>`;
+
+    return `
+      <tr onclick="window.location.href='/invoice/${inv.id}'" class="border-b border-base-200/50 hover:bg-base-200/50 cursor-pointer transition-colors">
+        <td onclick="event.stopPropagation()"><input type="checkbox" class="checkbox checkbox-sm row-checkbox" data-invoice-id="${inv.id}" ${isChecked} /></td>
+        <td class="font-mono text-sm font-medium">${escapeHtml(inv.invoice_number || '--')}</td>
+        <td class="max-w-[200px] truncate">${escapeHtml(vendorDisplay)}</td>
+        <td class="font-mono font-medium">${formatCurrency(inv.total)}</td>
+        <td class="hidden sm:table-cell text-sm">${formatDate(inv.invoice_date)}</td>
+        <td class="hidden md:table-cell text-sm">${formatDate(inv.due_date)}</td>
+        <td>${getStatusBadge(inv.status || 'pending')}</td>
+        <td class="hidden lg:table-cell"><span class="${conf.class}">${conf.text}</span></td>
+        ${actionsHtml}
+      </tr>
+    `;
   }
 
   function renderTable(invoices: any[]) {
@@ -400,23 +565,37 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     tableContainer.classList.remove('hidden');
     tableContainer.classList.add('fade-in');
 
-    tableBody.innerHTML = filtered
-      .map((inv) => {
-        const conf = formatConfidence(inv.confidence);
-        const vendorDisplay = inv.vendors?.name || inv.vendor_name || '--';
-        return `
-          <tr onclick="window.location.href='/invoice/${inv.id}'" class="border-b border-base-200/50 hover:bg-base-200/50 cursor-pointer transition-colors">
-            <td class="font-mono text-sm font-medium">${escapeHtml(inv.invoice_number || '--')}</td>
-            <td class="max-w-[200px] truncate">${escapeHtml(vendorDisplay)}</td>
-            <td class="font-mono font-medium">${formatCurrency(inv.total)}</td>
-            <td class="hidden sm:table-cell text-sm">${formatDate(inv.invoice_date)}</td>
-            <td class="hidden md:table-cell text-sm">${formatDate(inv.due_date)}</td>
-            <td>${getStatusBadge(inv.status || 'pending')}</td>
-            <td class="hidden lg:table-cell"><span class="${conf.class}">${conf.text}</span></td>
-          </tr>
-        `;
-      })
-      .join('');
+    if (vendorGroupMode) {
+      renderVendorGroupedTable(filtered);
+    } else {
+      tableBody.innerHTML = filtered.map((inv) => buildInvoiceRow(inv)).join('');
+    }
+
+    bindCheckboxEvents();
+    updateBulkUI();
+  }
+
+  function renderVendorGroupedTable(invoices: any[]) {
+    // Group by vendor
+    const groups: Record<string, any[]> = {};
+    for (const inv of invoices) {
+      const vendor = inv.vendors?.name || inv.vendor_name || 'Unknown Vendor';
+      if (!groups[vendor]) groups[vendor] = [];
+      groups[vendor].push(inv);
+    }
+
+    // Sort vendor names alphabetically
+    const sortedVendors = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+
+    let html = '';
+    for (const vendor of sortedVendors) {
+      const vendorInvoices = groups[vendor];
+      const vendorTotal = vendorInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
+      html += `<tr class="bg-base-200 vendor-group-header"><td colspan="9" class="font-bold">${escapeHtml(vendor)} (${vendorInvoices.length} invoice${vendorInvoices.length !== 1 ? 's' : ''} - ${formatCurrency(vendorTotal)})</td></tr>`;
+      html += vendorInvoices.map((inv) => buildInvoiceRow(inv)).join('');
+    }
+
+    tableBody.innerHTML = html;
   }
 
   function renderPagination(pagination: any) {
@@ -487,6 +666,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
 
   function showError(message: string) {
     tableLoading.classList.add('hidden');
+    tableLoading.style.display = 'none';
     tableContainer.classList.add('hidden');
     tableEmpty.classList.add('hidden');
     tableEmpty.style.display = 'none';
@@ -511,6 +691,75 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     return div.innerHTML;
   }
 
+  // ─── Time Range Helpers ───────────────────────────────────────────
+  function computeDateFrom(range: string): string {
+    const now = new Date();
+    switch (range) {
+      case 'today': {
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        return start.toISOString();
+      }
+      case 'week': {
+        // Start of this week (Monday)
+        const day = now.getDay();
+        const diff = day === 0 ? 6 : day - 1; // Monday = 0 offset
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff);
+        return start.toISOString();
+      }
+      case 'month': {
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        return start.toISOString();
+      }
+      case 'all':
+      default:
+        return '';
+    }
+  }
+
+  function setActiveRangeButton(range: string) {
+    timeRangeButtons.querySelectorAll('button').forEach((btn) => {
+      if (btn.dataset.range === range) {
+        btn.classList.add('btn-active');
+      } else {
+        btn.classList.remove('btn-active');
+      }
+    });
+  }
+
+  // ─── CSV Export ───────────────────────────────────────────────────
+  function exportCsv() {
+    const filtered = applyClientFilters(allInvoices);
+    const headers = ['invoice_number', 'vendor', 'amount', 'date', 'due_date', 'status', 'confidence'];
+    const rows = filtered.map((inv) => {
+      const vendor = inv.vendors?.name || inv.vendor_name || '';
+      const amount = inv.total != null ? String(inv.total) : '';
+      const date = inv.invoice_date || '';
+      const dueDate = inv.due_date || '';
+      const status = inv.status || '';
+      const confidence = inv.confidence != null ? String(Math.round(inv.confidence * 100)) + '%' : '';
+      return [inv.invoice_number || '', vendor, amount, date, dueDate, status, confidence];
+    });
+
+    let csvContent = headers.join(',') + '\n';
+    for (const row of rows) {
+      csvContent += row.map((cell) => {
+        // Escape cells containing commas, quotes, or newlines
+        const escaped = String(cell).replace(/"/g, '""');
+        return `"${escaped}"`;
+      }).join(',') + '\n';
+    }
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `invoices-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
   // ─── Main Load Function ───────────────────────────────────────────
   async function loadDashboard() {
     showLoading();
@@ -529,7 +778,42 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     }
   }
 
+  // ─── Bulk Action Handlers ─────────────────────────────────────────
+  async function executeBulkAction(action: 'approve' | 'reject') {
+    if (selectedInvoices.size === 0) return;
+
+    const ids = Array.from(selectedInvoices);
+    const confirmMsg = `Are you sure you want to ${action} ${ids.length} invoice${ids.length !== 1 ? 's' : ''}?`;
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      for (const id of ids) {
+        await callApproveEndpoint(id, action);
+      }
+      selectedInvoices.clear();
+      selectAllCheckbox.checked = false;
+      updateBulkUI();
+      await loadDashboard();
+    } catch (err: any) {
+      console.error(`Bulk ${action} error:`, err);
+      alert(`Failed to ${action} some invoices: ${err.message}`);
+      await loadDashboard();
+    }
+  }
+
   // ─── Event Listeners ─────────────────────────────────────────────
+
+  // Time range buttons
+  timeRangeButtons.querySelectorAll('button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const range = (btn as HTMLElement).dataset.range || 'all';
+      currentDateFrom = computeDateFrom(range);
+      setActiveRangeButton(range);
+      currentPage = 1;
+      loadDashboard();
+    });
+  });
+
   // Status filter -> triggers API call (server-side filter)
   filterStatus.addEventListener('change', () => {
     currentStatus = filterStatus.value;
@@ -575,6 +859,42 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   // Retry on error
   retryBtn.addEventListener('click', () => {
     loadDashboard();
+  });
+
+  // Select All checkbox
+  selectAllCheckbox.addEventListener('change', () => {
+    const checkboxes = tableBody.querySelectorAll<HTMLInputElement>('.row-checkbox');
+    checkboxes.forEach((cb) => {
+      cb.checked = selectAllCheckbox.checked;
+      const id = cb.dataset.invoiceId!;
+      if (selectAllCheckbox.checked) {
+        selectedInvoices.add(id);
+      } else {
+        selectedInvoices.delete(id);
+      }
+    });
+    updateBulkUI();
+  });
+
+  // Bulk action buttons
+  bulkApproveBtn.addEventListener('click', () => executeBulkAction('approve'));
+  bulkRejectBtn.addEventListener('click', () => executeBulkAction('reject'));
+  bulkCancelBtn.addEventListener('click', () => {
+    selectedInvoices.clear();
+    selectAllCheckbox.checked = false;
+    const checkboxes = tableBody.querySelectorAll<HTMLInputElement>('.row-checkbox');
+    checkboxes.forEach((cb) => { cb.checked = false; });
+    updateBulkUI();
+  });
+
+  // CSV Export
+  exportCsvBtn.addEventListener('click', () => exportCsv());
+
+  // Vendor Group Toggle
+  toggleVendorGroupBtn.addEventListener('click', () => {
+    vendorGroupMode = !vendorGroupMode;
+    toggleVendorGroupBtn.classList.toggle('btn-active', vendorGroupMode);
+    renderTable(allInvoices);
   });
 
   // ─── Initial Load ────────────────────────────────────────────────

@@ -123,7 +123,12 @@ Deno.serve(async (req: Request) => {
 
     const { data: updated, error: updateError } = await supabase
       .from("invoices")
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .update({
+        status: newStatus,
+        updated_at: new Date().toISOString(),
+        reviewed_by: user.email,
+        reviewed_at: new Date().toISOString(),
+      })
       .eq("id", invoice_id)
       .select("*")
       .single();

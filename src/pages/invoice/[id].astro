@@ -203,6 +203,14 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
               <span class="loading loading-spinner loading-sm"></span>
               <span>Processing...</span>
             </div>
+            <!-- Review Details (shown when reviewed_by is present) -->
+            <div id="review-details" class="hidden mt-4 pt-4 border-t border-base-200">
+              <h3 class="text-sm font-semibold text-base-content/70 mb-2">Review Details</h3>
+              <div class="space-y-1 text-sm">
+                <p><span class="text-base-content/50">Reviewed by:</span> <span id="reviewed-by" class="font-medium"></span></p>
+                <p><span class="text-base-content/50">Reviewed at:</span> <span id="reviewed-at" class="font-medium"></span></p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -263,18 +271,6 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
           </div>
         </div>
 
-        <!-- Processing Log Timeline -->
-        <div class="card bg-base-100 shadow-sm">
-          <div class="card-body">
-            <h2 class="card-title text-lg mb-4">Processing Log</h2>
-            <div id="processing-log-empty" class="text-center py-4 text-base-content/40">
-              <p class="text-sm">Processing log timeline coming soon.</p>
-            </div>
-            <ul id="processing-log-timeline" class="hidden timeline timeline-vertical timeline-compact timeline-snap-icon">
-            </ul>
-          </div>
-        </div>
-
         <!-- Invoice Metadata -->
         <div class="card bg-base-100 shadow-sm">
           <div class="card-body">
@@ -285,6 +281,21 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
           </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- Processing Timeline -->
+    <div class="card bg-base-100 shadow-sm mt-6">
+      <div class="card-body">
+        <h3 class="card-title text-lg">Processing Timeline</h3>
+        <div id="timeline-loading" class="flex items-center justify-center py-6 gap-2">
+          <span class="loading loading-spinner loading-sm"></span>
+          <span class="text-sm text-base-content/60">Loading timeline...</span>
+        </div>
+        <div id="timeline-empty" class="hidden text-center py-6 text-base-content/40">
+          <p class="text-sm">No processing logs available.</p>
+        </div>
+        <ul id="processing-timeline" class="hidden steps steps-vertical w-full"></ul>
       </div>
     </div>
   </div>
@@ -320,6 +331,7 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
       id: string;
       customer_id: string | null;
       vendor_id: string | null;
+      vendors: { name: string } | null;
       invoice_number: string | null;
       invoice_date: string | null;
       due_date: string | null;
@@ -336,6 +348,8 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
       source_email_subject: string | null;
       source_email_from: string | null;
       raw_text: string | null;
+      reviewed_by: string | null;
+      reviewed_at: string | null;
       created_at: string;
       updated_at: string | null;
     }
@@ -528,6 +542,9 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
       // Raw text
       renderRawText(invoice.raw_text);
 
+      // Review details
+      renderReviewDetails(invoice);
+
       // Enable/disable action buttons based on status
       const canAct = ['pending', 'flagged'].includes(invoice.status);
       (document.getElementById('btn-approve') as HTMLButtonElement).disabled = !canAct;
@@ -642,6 +659,97 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
       }
     }
 
+    function renderReviewDetails(invoice: Invoice) {
+      const reviewSection = document.getElementById('review-details')!;
+      if (invoice.reviewed_by) {
+        reviewSection.classList.remove('hidden');
+        document.getElementById('reviewed-by')!.textContent = invoice.reviewed_by;
+        document.getElementById('reviewed-at')!.textContent = formatDateTime(invoice.reviewed_at);
+      } else {
+        reviewSection.classList.add('hidden');
+      }
+    }
+
+    interface ProcessingLog {
+      id: string;
+      step: string;
+      status: string;
+      error_message: string | null;
+      duration_ms: number | null;
+      created_at: string;
+    }
+
+    async function fetchAndRenderProcessingTimeline(invoiceId: string, token: string) {
+      const timelineLoading = document.getElementById('timeline-loading')!;
+      const timelineEmpty = document.getElementById('timeline-empty')!;
+      const timelineEl = document.getElementById('processing-timeline')!;
+
+      try {
+        const res = await fetch(
+          `https://tcgptxbqqyxmvsaqiblc.supabase.co/rest/v1/processing_logs?invoice_id=eq.${invoiceId}&order=created_at.asc&select=id,step,status,error_message,duration_ms,created_at`,
+          {
+            headers: {
+              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjZ3B0eGJxcXl4bXZzYXFpYmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzOTQwODksImV4cCI6MjA4NTk3MDA4OX0.nyTEkolz8sft-qFoHpwsLl4F4JkIEW7A3c8aPGftprc',
+              'Authorization': `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!res.ok) {
+          throw new Error(`Failed to fetch processing logs: ${res.status}`);
+        }
+
+        const logs: ProcessingLog[] = await res.json();
+
+        timelineLoading.classList.add('hidden');
+
+        if (!logs || logs.length === 0) {
+          timelineEmpty.classList.remove('hidden');
+          return;
+        }
+
+        timelineEl.classList.remove('hidden');
+        timelineEl.innerHTML = '';
+
+        logs.forEach((log) => {
+          const isSuccess = log.status === 'success';
+          const stepClass = isSuccess ? 'step-success' : 'step-error';
+          const icon = isSuccess ? '\u2713' : '\u2717';
+          const badgeClass = isSuccess ? 'badge-success' : 'badge-error';
+          const durationText = log.duration_ms !== null ? `${log.duration_ms}ms` : '--';
+
+          const li = document.createElement('li');
+          li.setAttribute('data-content', icon);
+          li.className = `step ${stepClass}`;
+
+          let errorHtml = '';
+          if (!isSuccess && log.error_message) {
+            errorHtml = `<div class="text-xs text-error mt-1">${escapeHtml(log.error_message)}</div>`;
+          }
+
+          li.innerHTML = `
+            <div class="text-left py-2">
+              <span class="font-semibold capitalize">${escapeHtml(log.step)}</span>
+              <span class="badge ${badgeClass} badge-sm ml-2">${escapeHtml(log.status)}</span>
+              <div class="text-xs text-base-content/50 mt-1">
+                <span>Duration: ${durationText}</span> &middot; <span>${formatDateTime(log.created_at)}</span>
+              </div>
+              ${errorHtml}
+            </div>
+          `;
+
+          timelineEl.appendChild(li);
+        });
+      } catch (err) {
+        timelineLoading.classList.add('hidden');
+        timelineEmpty.classList.remove('hidden');
+        const timelineEmptyP = timelineEmpty.querySelector('p');
+        if (timelineEmptyP) {
+          timelineEmptyP.textContent = 'Failed to load processing timeline.';
+        }
+      }
+    }
+
     function escapeHtml(str: string): string {
       const div = document.createElement('div');
       div.textContent = str;
@@ -710,6 +818,13 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
 
         // Keep buttons disabled since the invoice is now actioned
         currentInvoice.status = newStatus;
+
+        // Show reviewer info immediately
+        const userEmail = session.user?.email || 'Unknown';
+        const reviewedAt = new Date().toISOString();
+        currentInvoice.reviewed_by = userEmail;
+        currentInvoice.reviewed_at = reviewedAt;
+        renderReviewDetails(currentInvoice);
 
       } catch (err: any) {
         actionFeedback.className = 'alert alert-error mt-3';
@@ -800,6 +915,12 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
         currentInvoice = invoice;
         renderInvoice(invoice);
         showContent();
+
+        // Fetch and render processing timeline
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          fetchAndRenderProcessingTimeline(invoiceId, session.access_token);
+        }
       } catch (err: any) {
         showError(err.message || 'Failed to load invoice data.');
       }

@@ -26,35 +26,38 @@ echo ""
 # --- Admin functions: function-level JWT + admin role auth ---
 # Deployed with --no-verify-jwt so the gateway doesn't block valid Supabase Auth tokens.
 # Each function verifies JWT + admin role itself via verifyJwt() + requireAdmin().
-echo "[1/9] Deploying admin-create-customer (JWT + admin auth)..."
+echo "[1/10] Deploying admin-create-customer (JWT + admin auth)..."
 supabase functions deploy admin-create-customer --no-verify-jwt
 
-echo "[2/9] Deploying admin-list-customers (JWT + admin auth)..."
+echo "[2/10] Deploying admin-list-customers (JWT + admin auth)..."
 supabase functions deploy admin-list-customers --no-verify-jwt
 
-echo "[3/9] Deploying admin-get-dashboard (JWT + admin auth)..."
+echo "[3/10] Deploying admin-get-dashboard (JWT + admin auth)..."
 supabase functions deploy admin-get-dashboard --no-verify-jwt
 
-echo "[4/9] Deploying approve-invoice (JWT + admin auth)..."
+echo "[4/10] Deploying approve-invoice (JWT + admin auth)..."
 supabase functions deploy approve-invoice --no-verify-jwt
 
 # --- Processing functions: API key auth at function level ---
 # These use --no-verify-jwt because n8n calls them with API keys, not Supabase JWTs.
 # Each function verifies the API key itself and scopes all queries to the customer.
-echo "[5/9] Deploying process-invoice (API key auth)..."
+echo "[5/10] Deploying process-invoice (API key auth)..."
 supabase functions deploy process-invoice --no-verify-jwt
 
-echo "[6/9] Deploying classify-invoice (API key auth)..."
+echo "[6/10] Deploying classify-invoice (API key auth)..."
 supabase functions deploy classify-invoice --no-verify-jwt
 
-echo "[7/9] Deploying extract-invoice (API key auth)..."
+echo "[7/10] Deploying extract-invoice (API key auth)..."
 supabase functions deploy extract-invoice --no-verify-jwt
 
-echo "[8/9] Deploying validate-invoice (API key auth)..."
+echo "[8/10] Deploying validate-invoice (API key auth)..."
 supabase functions deploy validate-invoice --no-verify-jwt
 
-echo "[9/9] Deploying build-slack-payload (API key auth)..."
+echo "[9/10] Deploying build-slack-payload (API key auth)..."
 supabase functions deploy build-slack-payload --no-verify-jwt
+
+echo "[10/10] Deploying build-quickbooks-payload (API key auth)..."
+supabase functions deploy build-quickbooks-payload --no-verify-jwt
 
 echo ""
 echo "=== All functions deployed ==="
