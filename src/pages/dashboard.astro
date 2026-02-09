@@ -43,6 +43,53 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   <!-- ===== All-time total line ===== -->
   <p id="stat-total-line" class="text-sm opacity-50 mt-2 mb-4 text-center"></p>
 
+  <!-- ===== Analytics Charts ===== -->
+  <details class="collapse collapse-arrow bg-base-100 shadow-sm mb-4" id="analytics-section">
+    <summary class="collapse-title font-semibold text-sm">Analytics &amp; Insights</summary>
+    <div class="collapse-content">
+      <div id="analytics-loading" class="flex items-center justify-center py-8 hidden">
+        <span class="loading loading-spinner loading-md text-primary"></span>
+        <span class="ml-3 text-sm opacity-60">Loading analytics...</span>
+      </div>
+      <div id="analytics-error" class="hidden text-center py-8">
+        <p class="text-sm opacity-50">Analytics coming soon.</p>
+      </div>
+      <div id="analytics-content" class="hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4">
+          <!-- Invoice Volume Chart -->
+          <div>
+            <h3 class="text-sm font-semibold mb-3 opacity-60">Invoice Volume (Last 30 Days)</h3>
+            <canvas id="chart-volume" height="200"></canvas>
+          </div>
+          <!-- Spend by Vendor Chart -->
+          <div>
+            <h3 class="text-sm font-semibold mb-3 opacity-60">Top Vendors by Spend</h3>
+            <canvas id="chart-vendors" height="200"></canvas>
+          </div>
+          <!-- Status Breakdown Chart -->
+          <div>
+            <h3 class="text-sm font-semibold mb-3 opacity-60">Status Breakdown</h3>
+            <canvas id="chart-status" height="200"></canvas>
+          </div>
+          <!-- Quick Stats -->
+          <div>
+            <h3 class="text-sm font-semibold mb-3 opacity-60">Processing Performance</h3>
+            <div class="stats stats-vertical shadow w-full">
+              <div class="stat">
+                <div class="stat-title">Avg Confidence Score</div>
+                <div class="stat-value text-lg" id="stat-avg-confidence">--</div>
+              </div>
+              <div class="stat">
+                <div class="stat-title">Avg Processing Time</div>
+                <div class="stat-value text-lg" id="stat-avg-processing">--</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </details>
+
   <!-- ===== Time Range Preset Buttons ===== -->
   <div class="flex gap-2 mb-4" id="time-range-buttons">
     <button class="btn btn-sm" data-range="today">Today</button>
@@ -884,6 +931,268 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     toggleVendorGroupBtn.classList.toggle('btn-active', vendorGroupMode);
     renderTable(allInvoices);
   });
+
+  // ─── Analytics: Chart.js Loader ──────────────────────────────────
+  async function loadChartJs(): Promise<any> {
+    if ((window as any).Chart) return (window as any).Chart;
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
+      script.onload = () => resolve((window as any).Chart);
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }
+
+  // ─── Analytics: Data Fetching ──────────────────────────────────
+  let analyticsCache: any = null;
+  let analyticsChartInstances: any[] = [];
+
+  async function fetchAnalytics() {
+    const token = await getAuthToken();
+    if (!token) return null;
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const params = new URLSearchParams({
+      date_from: thirtyDaysAgo.toISOString(),
+      date_to: new Date().toISOString()
+    });
+
+    const res = await fetch(`${FUNCTIONS_URL}/admin-get-analytics?${params}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!res.ok) return null;
+    return res.json();
+  }
+
+  // ─── Analytics: Chart Color Schemes ────────────────────────────
+  const CHART_COLORS = {
+    primary: '#570df8',
+    success: '#36d399',
+    warning: '#fbbd23',
+    error: '#f87272',
+    info: '#3abff8',
+  };
+
+  const STATUS_COLOR_MAP: Record<string, string> = {
+    pending: CHART_COLORS.warning,
+    approved: CHART_COLORS.success,
+    flagged: CHART_COLORS.error,
+    rejected: '#a8a8a8',
+    synced: CHART_COLORS.info,
+    error: CHART_COLORS.error,
+  };
+
+  // ─── Analytics: Rendering ──────────────────────────────────────
+  function renderAnalyticsCharts(data: any, Chart: any) {
+    // Destroy any existing chart instances to prevent canvas reuse issues
+    for (const chart of analyticsChartInstances) {
+      chart.destroy();
+    }
+    analyticsChartInstances = [];
+
+    const analyticsContent = document.getElementById('analytics-content')!;
+    analyticsContent.classList.remove('hidden');
+
+    // --- Volume Chart (Line) ---
+    const volumeCtx = (document.getElementById('chart-volume') as HTMLCanvasElement)?.getContext('2d');
+    if (volumeCtx && data.volume) {
+      const labels = data.volume.map((d: any) => {
+        const date = new Date(d.date);
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      });
+      const values = data.volume.map((d: any) => d.count);
+
+      const volumeChart = new Chart(volumeCtx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Invoices',
+            data: values,
+            borderColor: CHART_COLORS.primary,
+            backgroundColor: CHART_COLORS.primary + '20',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 2,
+            pointHoverRadius: 5,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { precision: 0 },
+              grid: { color: 'rgba(0,0,0,0.05)' },
+            },
+            x: {
+              grid: { display: false },
+              ticks: { maxTicksLimit: 10 },
+            }
+          }
+        }
+      });
+      analyticsChartInstances.push(volumeChart);
+    }
+
+    // --- Vendors Chart (Horizontal Bar) ---
+    const vendorsCtx = (document.getElementById('chart-vendors') as HTMLCanvasElement)?.getContext('2d');
+    if (vendorsCtx && data.top_vendors) {
+      const vendorLabels = data.top_vendors.map((v: any) => {
+        const name = v.vendor_name || v.name || 'Unknown';
+        return name.length > 20 ? name.substring(0, 20) + '...' : name;
+      });
+      const vendorValues = data.top_vendors.map((v: any) => v.total_spend || v.amount || 0);
+
+      const vendorsChart = new Chart(vendorsCtx, {
+        type: 'bar',
+        data: {
+          labels: vendorLabels,
+          datasets: [{
+            label: 'Total Spend',
+            data: vendorValues,
+            backgroundColor: CHART_COLORS.info + 'CC',
+            borderColor: CHART_COLORS.info,
+            borderWidth: 1,
+            borderRadius: 3,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          indexAxis: 'y',
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx: any) => {
+                  return ' $' + Number(ctx.raw).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              beginAtZero: true,
+              grid: { color: 'rgba(0,0,0,0.05)' },
+              ticks: {
+                callback: (value: any) => '$' + Number(value).toLocaleString('en-US', { notation: 'compact' } as any),
+              }
+            },
+            y: {
+              grid: { display: false },
+            }
+          }
+        }
+      });
+      analyticsChartInstances.push(vendorsChart);
+    }
+
+    // --- Status Chart (Doughnut) ---
+    const statusCtx = (document.getElementById('chart-status') as HTMLCanvasElement)?.getContext('2d');
+    if (statusCtx && data.status_breakdown) {
+      const statusLabels = data.status_breakdown.map((s: any) =>
+        (s.status || 'unknown').charAt(0).toUpperCase() + (s.status || 'unknown').slice(1)
+      );
+      const statusValues = data.status_breakdown.map((s: any) => s.count);
+      const statusColors = data.status_breakdown.map((s: any) =>
+        STATUS_COLOR_MAP[s.status] || '#d1d5db'
+      );
+
+      const statusChart = new Chart(statusCtx, {
+        type: 'doughnut',
+        data: {
+          labels: statusLabels,
+          datasets: [{
+            data: statusValues,
+            backgroundColor: statusColors,
+            borderWidth: 2,
+            borderColor: '#fff',
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { padding: 12, usePointStyle: true, pointStyle: 'circle' },
+            },
+          },
+          cutout: '55%',
+        }
+      });
+      analyticsChartInstances.push(statusChart);
+    }
+
+    // --- Quick Stats ---
+    if (data.avg_confidence != null) {
+      const avgConfEl = document.getElementById('stat-avg-confidence');
+      if (avgConfEl) {
+        avgConfEl.textContent = Math.round(data.avg_confidence * 100) + '%';
+      }
+    }
+    if (data.avg_processing_time != null) {
+      const avgProcEl = document.getElementById('stat-avg-processing');
+      if (avgProcEl) {
+        const seconds = Number(data.avg_processing_time);
+        avgProcEl.textContent = seconds < 60
+          ? seconds.toFixed(1) + 's'
+          : (seconds / 60).toFixed(1) + 'min';
+      }
+    }
+  }
+
+  // ─── Analytics: Toggle Handler (Lazy Load) ─────────────────────
+  const analyticsSection = document.getElementById('analytics-section') as HTMLDetailsElement;
+  const analyticsLoading = document.getElementById('analytics-loading')!;
+  const analyticsError = document.getElementById('analytics-error')!;
+  const analyticsContent = document.getElementById('analytics-content')!;
+
+  if (analyticsSection) {
+    analyticsSection.addEventListener('toggle', async () => {
+      if (!analyticsSection.open) return;
+
+      // If already cached, don't re-fetch
+      if (analyticsCache) return;
+
+      analyticsLoading.classList.remove('hidden');
+      analyticsError.classList.add('hidden');
+      analyticsContent.classList.add('hidden');
+
+      try {
+        const [Chart, data] = await Promise.all([
+          loadChartJs(),
+          fetchAnalytics(),
+        ]);
+
+        analyticsLoading.classList.add('hidden');
+
+        if (!data || !Chart) {
+          analyticsError.classList.remove('hidden');
+          return;
+        }
+
+        analyticsCache = data;
+        renderAnalyticsCharts(data, Chart);
+      } catch (err) {
+        console.error('Analytics load error:', err);
+        analyticsLoading.classList.add('hidden');
+        analyticsError.classList.remove('hidden');
+      }
+    });
+  }
 
   // ─── Initial Load ────────────────────────────────────────────────
   loadDashboard();
