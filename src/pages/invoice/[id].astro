@@ -5,12 +5,20 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
 
 <DashboardLayout title="Invoice Detail">
 
-  <!-- Breadcrumb -->
-  <div class="text-sm breadcrumbs mb-4">
-    <ul>
-      <li><a href="/dashboard" class="no-underline text-base-content/60 hover:text-base-content">Dashboard</a></li>
-      <li class="text-base-content font-medium" id="breadcrumb-invoice">Invoice</li>
-    </ul>
+  <!-- Back button + Breadcrumb -->
+  <div class="flex items-center gap-3 mb-4">
+    <a href="/dashboard" class="btn btn-sm btn-ghost gap-1 no-underline">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+      Back
+    </a>
+    <div class="text-sm breadcrumbs">
+      <ul>
+        <li><a href="/dashboard" class="no-underline text-base-content/60 hover:text-base-content">Dashboard</a></li>
+        <li class="text-base-content font-medium" id="breadcrumb-invoice">Invoice</li>
+      </ul>
+    </div>
   </div>
 
   <!-- Loading State -->
@@ -80,7 +88,7 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
                 <p class="font-mono text-sm mt-0.5" id="detail-customer">--</p>
               </div>
               <div>
-                <p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Vendor ID</p>
+                <p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Vendor</p>
                 <p class="font-mono text-sm mt-0.5" id="detail-vendor">--</p>
               </div>
               <div>
@@ -495,7 +503,7 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
       document.getElementById('detail-invoice-date')!.textContent = formatDate(invoice.invoice_date);
       document.getElementById('detail-due-date')!.textContent = formatDate(invoice.due_date);
       document.getElementById('detail-customer')!.textContent = invoice.customer_id || '--';
-      document.getElementById('detail-vendor')!.textContent = invoice.vendor_id || '--';
+      document.getElementById('detail-vendor')!.textContent = invoice.vendors?.name || '--';
       document.getElementById('detail-email-from')!.textContent = invoice.source_email_from || '--';
       document.getElementById('detail-email-subject')!.textContent = invoice.source_email_subject || '--';
       document.getElementById('detail-created')!.textContent = formatDateTime(invoice.created_at);

@@ -384,6 +384,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
 
     // Show/hide states
     tableLoading.classList.add('hidden');
+    tableLoading.style.display = 'none';
     tableError.classList.add('hidden');
     tableError.style.display = 'none';
 
@@ -402,9 +403,9 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     tableBody.innerHTML = filtered
       .map((inv) => {
         const conf = formatConfidence(inv.confidence);
-        const vendorDisplay = inv.vendor_name || inv.vendor_id?.substring(0, 8) || '--';
+        const vendorDisplay = inv.vendors?.name || inv.vendor_name || '--';
         return `
-          <tr onclick="window.location.href='/invoice/${inv.id}'" class="border-b border-base-200/50">
+          <tr onclick="window.location.href='/invoice/${inv.id}'" class="border-b border-base-200/50 hover:bg-base-200/50 cursor-pointer transition-colors">
             <td class="font-mono text-sm font-medium">${escapeHtml(inv.invoice_number || '--')}</td>
             <td class="max-w-[200px] truncate">${escapeHtml(vendorDisplay)}</td>
             <td class="font-mono font-medium">${formatCurrency(inv.total)}</td>

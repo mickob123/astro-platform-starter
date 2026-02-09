@@ -52,7 +52,7 @@ Deno.serve(async (req: Request) => {
 
       const { data: invoice, error: fetchError } = await supabase
         .from("invoices")
-        .select("*")
+        .select("*, vendors(name)")
         .eq("id", invoiceId)
         .single();
 

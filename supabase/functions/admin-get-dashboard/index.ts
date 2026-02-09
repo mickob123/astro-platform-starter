@@ -73,7 +73,7 @@ Deno.serve(async (req: Request) => {
     let invoiceQuery = supabase
       .from("invoices")
       .select(
-        "id, customer_id, vendor_id, invoice_number, invoice_date, due_date, currency, total, status, is_valid, confidence, created_at",
+        "id, customer_id, vendor_id, invoice_number, invoice_date, due_date, currency, total, status, is_valid, confidence, created_at, vendors(name)",
         { count: "exact" },
       );
 
