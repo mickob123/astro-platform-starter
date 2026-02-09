@@ -78,6 +78,16 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Guard against oversized payloads that could cause excessive API costs
+    const MAX_TEXT_LENGTH = 100_000; // ~100KB of text
+    const totalLength = (email_subject?.length || 0) + (email_body?.length || 0) + (attachment_text?.length || 0);
+    if (totalLength > MAX_TEXT_LENGTH) {
+      return new Response(
+        JSON.stringify({ error: `Request body text exceeds maximum allowed length of ${MAX_TEXT_LENGTH} characters` }),
+        { status: 413, headers: { ...headers, "Content-Type": "application/json" } },
+      );
+    }
+
     // --- Create processing log (audit trail) ---
     const { data: logData, error: logError } = await supabase
       .from("processing_logs")
@@ -339,7 +349,6 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({
         error: "Processing failed",
         log_id: logId,
-        detail: error instanceof Error ? error.message : undefined,
       }),
       { status: 500, headers: { ...headers, "Content-Type": "application/json" } },
     );

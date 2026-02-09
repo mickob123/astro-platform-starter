@@ -44,10 +44,15 @@ Deno.serve(async (req: Request) => {
 
     let query = supabase
       .from("customers")
-      .select("id, name, email, is_active, accounting_system, created_at", { count: "exact" });
+      .select("id, name, email, is_active, accounting_platform, created_at", { count: "exact" });
 
     if (search) {
-      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
+      // Sanitize search input: remove characters that could manipulate PostgREST filter syntax
+      // Commas, parens, dots, and backslashes can be used for filter injection
+      const sanitized = search.replace(/[,().*\\]/g, "");
+      if (sanitized.length > 0) {
+        query = query.or(`name.ilike.%${sanitized}%,email.ilike.%${sanitized}%`);
+      }
     }
 
     const { data, count, error } = await query

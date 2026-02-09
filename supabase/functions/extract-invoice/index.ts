@@ -52,6 +52,15 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Guard against oversized payloads that could cause excessive API costs
+    const MAX_TEXT_LENGTH = 100_000; // ~100KB of text
+    if (typeof document_text !== "string" || document_text.length > MAX_TEXT_LENGTH) {
+      return new Response(
+        JSON.stringify({ error: `document_text must be a string of at most ${MAX_TEXT_LENGTH} characters` }),
+        { status: 413, headers: { ...headers, "Content-Type": "application/json" } },
+      );
+    }
+
     const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
 
     const result = await withRetry(async () => {
