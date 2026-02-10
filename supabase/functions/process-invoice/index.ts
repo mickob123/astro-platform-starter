@@ -15,15 +15,139 @@
  *     so invoices are never silently lost
  *
  * PDF support:
- *   - Accepts pre-extracted text via attachment_text
- *     (extracted in n8n workflow using Node.js)
- *   - Falls back to email_body if no attachment text
+ *   - Accepts base64-encoded PDF via attachment_base64
+ *   - Extracts text using Deno's native DecompressionStream
+ *     (web standard API, no external libraries)
+ *   - Also accepts pre-extracted text via attachment_text
+ *   - Falls back to email_body if extraction fails
  */
 
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { verifyApiKey, AuthError } from "../_shared/auth.ts";
 import { withRetry } from "../_shared/retry.ts";
 import OpenAI from "https://esm.sh/openai@4.52.0";
+
+/**
+ * Inflate a raw deflate/zlib compressed buffer using
+ * the web-standard DecompressionStream API (native Deno).
+ */
+async function inflateBytes(
+  data: Uint8Array,
+): Promise<Uint8Array | null> {
+  // Try 'deflate' (zlib-wrapped, RFC 1950) first —
+  // this is what most PDF FlateDecode uses
+  for (const fmt of ["deflate", "raw"] as const) {
+    try {
+      const ds = new DecompressionStream(fmt as string);
+      const writer = ds.writable.getWriter();
+      writer.write(data);
+      writer.close();
+      const reader = ds.readable.getReader();
+      const chunks: Uint8Array[] = [];
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) chunks.push(value);
+      }
+      const total = chunks.reduce(
+        (s, c) => s + c.length, 0,
+      );
+      const result = new Uint8Array(total);
+      let off = 0;
+      for (const c of chunks) {
+        result.set(c, off);
+        off += c.length;
+      }
+      return result;
+    } catch {
+      continue; // try next format
+    }
+  }
+  return null;
+}
+
+/**
+ * Extract readable text from a PDF binary buffer.
+ * Uses DecompressionStream to inflate FlateDecode streams,
+ * then extracts text from PDF Tj/TJ text operators.
+ */
+async function extractTextFromPdf(
+  pdfBytes: Uint8Array,
+): Promise<string> {
+  const decoder = new TextDecoder("latin1");
+  const raw = decoder.decode(pdfBytes);
+  const allText: string[] = [];
+
+  // Find all stream/endstream blocks
+  const streamRe =
+    /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  let sm;
+
+  while ((sm = streamRe.exec(raw)) !== null) {
+    const streamData = sm[1];
+    const streamBytes = new Uint8Array(
+      streamData.length,
+    );
+    for (let i = 0; i < streamData.length; i++) {
+      streamBytes[i] = streamData.charCodeAt(i);
+    }
+
+    // Try to decompress (most PDF streams use Flate)
+    let decoded: string;
+    const inflated = await inflateBytes(streamBytes);
+    if (inflated && inflated.length > 0) {
+      decoded = new TextDecoder("latin1").decode(
+        inflated,
+      );
+    } else {
+      decoded = streamData;
+    }
+
+    // Extract text from PDF text operators:
+    // (text) Tj  — single string show
+    const tjRe = /\(([^)]*)\)\s*Tj/g;
+    let m;
+    while ((m = tjRe.exec(decoded)) !== null) {
+      allText.push(m[1]);
+    }
+
+    // [(text)(text)] TJ — array show
+    const tjArrRe = /\[([^\]]+)\]\s*TJ/gi;
+    while ((m = tjArrRe.exec(decoded)) !== null) {
+      const inner = m[1];
+      const partRe = /\(([^)]*)\)/g;
+      let p;
+      while ((p = partRe.exec(inner)) !== null) {
+        allText.push(p[1]);
+      }
+    }
+  }
+
+  // Clean up PDF escape sequences
+  let text = allText.join(" ");
+  text = text.replace(/\\n/g, "\n");
+  text = text.replace(/\\r/g, "\r");
+  text = text.replace(/\\t/g, "\t");
+  text = text.replace(/\\\(/g, "(");
+  text = text.replace(/\\\)/g, ")");
+  text = text.replace(/\\\\/g, "\\");
+  text = text.replace(/\s+/g, " ");
+  return text.trim();
+}
+
+/**
+ * Decode base64 PDF and extract text.
+ */
+async function pdfBase64ToText(
+  base64Data: string,
+): Promise<string> {
+  const binaryStr = atob(base64Data);
+  const bytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) {
+    bytes[i] = binaryStr.charCodeAt(i);
+  }
+  return await extractTextFromPdf(bytes);
+}
 
 const CLASSIFY_PROMPT = `You are an invoice classification system. Analyze the provided email content and determine if it represents a real vendor invoice.
 
@@ -83,15 +207,31 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // --- Resolve attachment text ---
-    // PDF text extraction is done in n8n (Node.js) and
-    // sent as attachment_text. attachment_base64 is kept
-    // for logging only.
-    const resolvedAttachmentText = attachment_text || null;
-    if (resolvedAttachmentText) {
-      console.log(`Received pre-extracted attachment text: ${resolvedAttachmentText.length} chars`);
-    } else if (attachment_base64) {
-      console.warn("Received attachment_base64 but no attachment_text — PDF text was not extracted upstream");
+    // --- Extract text from PDF attachment ---
+    // Priority: attachment_text (pre-extracted) >
+    //   attachment_base64 (extract here) > email_body
+    let resolvedAttachmentText = attachment_text || null;
+
+    if (!resolvedAttachmentText && attachment_base64) {
+      try {
+        if (typeof attachment_base64 !== "string" ||
+            attachment_base64.length > 14_000_000) {
+          console.warn("attachment_base64 too large");
+        } else {
+          console.log("Extracting PDF text via DecompressionStream...");
+          const extracted = await pdfBase64ToText(attachment_base64);
+          if (extracted && extracted.length > 20) {
+            resolvedAttachmentText = extracted;
+            console.log(`PDF text extracted: ${extracted.length} chars`);
+          } else {
+            console.warn("PDF extraction returned minimal text");
+          }
+        }
+      } catch (pdfErr) {
+        console.error("PDF extraction failed:", pdfErr);
+      }
+    } else if (resolvedAttachmentText) {
+      console.log(`Using pre-extracted text: ${resolvedAttachmentText.length} chars`);
     }
 
     // Guard against oversized payloads that could cause excessive API costs
