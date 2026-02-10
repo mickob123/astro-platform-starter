@@ -4,6 +4,35 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
 ---
 
 <DashboardLayout title="Vendors">
+  <!-- Back + Breadcrumb -->
+  <div class="flex items-center gap-3 mb-4">
+    <a href="/dashboard"
+       class="btn btn-sm btn-ghost gap-1 no-underline">
+      <svg xmlns="http://www.w3.org/2000/svg"
+           class="h-4 w-4" fill="none"
+           viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round"
+              stroke-linejoin="round" stroke-width="2"
+              d="M15 19l-7-7 7-7" />
+      </svg>
+      Back
+    </a>
+    <div class="text-sm breadcrumbs">
+      <ul>
+        <li>
+          <a href="/dashboard"
+             class="no-underline text-base-content/60
+                    hover:text-base-content">
+            Dashboard
+          </a>
+        </li>
+        <li class="text-base-content font-medium">
+          Vendors
+        </li>
+      </ul>
+    </div>
+  </div>
+
   <div class="flex items-center justify-between mb-6">
     <div>
       <h1 class="text-2xl font-bold">Vendors</h1>
