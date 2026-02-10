@@ -47,26 +47,39 @@ supabase functions deploy approve-invoice --no-verify-jwt
 echo "[7/13] Deploying invoice-comments (JWT auth)..."
 supabase functions deploy invoice-comments --no-verify-jwt
 
+echo "[8/13] Deploying admin-bulk-action (JWT + admin auth)..."
+supabase functions deploy admin-bulk-action --no-verify-jwt
+
+echo "[9/13] Deploying admin-accounting-sync (JWT + admin auth)..."
+supabase functions deploy admin-accounting-sync --no-verify-jwt
+
 # --- Processing functions: API key auth at function level ---
 # These use --no-verify-jwt because n8n calls them with API keys, not Supabase JWTs.
 # Each function verifies the API key itself and scopes all queries to the customer.
-echo "[8/13] Deploying process-invoice (API key auth)..."
+echo "[10/17] Deploying process-invoice (API key auth)..."
 supabase functions deploy process-invoice --no-verify-jwt
 
-echo "[9/13] Deploying classify-invoice (API key auth)..."
+echo "[11/17] Deploying classify-invoice (API key auth)..."
 supabase functions deploy classify-invoice --no-verify-jwt
 
-echo "[10/13] Deploying extract-invoice (API key auth)..."
+echo "[12/17] Deploying extract-invoice (API key auth)..."
 supabase functions deploy extract-invoice --no-verify-jwt
 
-echo "[11/13] Deploying validate-invoice (API key auth)..."
+echo "[13/17] Deploying validate-invoice (API key auth)..."
 supabase functions deploy validate-invoice --no-verify-jwt
 
-echo "[12/13] Deploying build-slack-payload (API key auth)..."
+echo "[14/17] Deploying build-slack-payload (API key auth)..."
 supabase functions deploy build-slack-payload --no-verify-jwt
 
-echo "[13/13] Deploying build-quickbooks-payload (API key auth)..."
+echo "[15/17] Deploying build-quickbooks-payload (API key auth)..."
 supabase functions deploy build-quickbooks-payload --no-verify-jwt
+
+echo "[16/17] Deploying check-duplicate (API key auth)..."
+supabase functions deploy check-duplicate --no-verify-jwt
+
+# --- Webhook functions: signature-based auth ---
+echo "[17/17] Deploying email-intake (webhook auth)..."
+supabase functions deploy email-intake --no-verify-jwt
 
 echo ""
 echo "=== All functions deployed ==="
