@@ -50,35 +50,38 @@ supabase functions deploy invoice-comments --no-verify-jwt
 echo "[8/13] Deploying admin-bulk-action (JWT + admin auth)..."
 supabase functions deploy admin-bulk-action --no-verify-jwt
 
-echo "[9/13] Deploying admin-accounting-sync (JWT + admin auth)..."
+echo "[9/18] Deploying admin-accounting-sync (JWT + admin auth)..."
 supabase functions deploy admin-accounting-sync --no-verify-jwt
+
+echo "[10/18] Deploying admin-vendors (JWT + admin auth)..."
+supabase functions deploy admin-vendors --no-verify-jwt
 
 # --- Processing functions: API key auth at function level ---
 # These use --no-verify-jwt because n8n calls them with API keys, not Supabase JWTs.
 # Each function verifies the API key itself and scopes all queries to the customer.
-echo "[10/17] Deploying process-invoice (API key auth)..."
+echo "[11/18] Deploying process-invoice (API key auth)..."
 supabase functions deploy process-invoice --no-verify-jwt
 
-echo "[11/17] Deploying classify-invoice (API key auth)..."
+echo "[12/18] Deploying classify-invoice (API key auth)..."
 supabase functions deploy classify-invoice --no-verify-jwt
 
-echo "[12/17] Deploying extract-invoice (API key auth)..."
+echo "[13/18] Deploying extract-invoice (API key auth)..."
 supabase functions deploy extract-invoice --no-verify-jwt
 
-echo "[13/17] Deploying validate-invoice (API key auth)..."
+echo "[14/18] Deploying validate-invoice (API key auth)..."
 supabase functions deploy validate-invoice --no-verify-jwt
 
-echo "[14/17] Deploying build-slack-payload (API key auth)..."
+echo "[15/18] Deploying build-slack-payload (API key auth)..."
 supabase functions deploy build-slack-payload --no-verify-jwt
 
-echo "[15/17] Deploying build-quickbooks-payload (API key auth)..."
+echo "[16/18] Deploying build-quickbooks-payload (API key auth)..."
 supabase functions deploy build-quickbooks-payload --no-verify-jwt
 
-echo "[16/17] Deploying check-duplicate (API key auth)..."
+echo "[17/18] Deploying check-duplicate (API key auth)..."
 supabase functions deploy check-duplicate --no-verify-jwt
 
 # --- Webhook functions: signature-based auth ---
-echo "[17/17] Deploying email-intake (webhook auth)..."
+echo "[18/18] Deploying email-intake (webhook auth)..."
 supabase functions deploy email-intake --no-verify-jwt
 
 echo ""

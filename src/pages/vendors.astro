@@ -36,245 +36,370 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   <div class="flex items-center justify-between mb-6">
     <div>
       <h1 class="text-2xl font-bold">Vendors</h1>
-      <p class="text-sm opacity-50 mt-1">View and manage your vendor relationships</p>
+      <p class="text-sm opacity-50 mt-1">
+        View and manage your vendor relationships
+      </p>
     </div>
   </div>
 
-  <!-- Search -->
-  <div class="form-control w-full max-w-md mb-6">
-    <input id="vendor-search" type="text" class="input input-bordered input-sm" placeholder="Search vendors..." />
+  <!-- Search + Per Page -->
+  <div class="flex flex-wrap items-end gap-4 mb-4">
+    <div class="form-control">
+      <label class="label py-0.5">
+        <span class="label-text text-xs uppercase
+          tracking-wide font-semibold opacity-50">
+          Search
+        </span>
+      </label>
+      <input id="vendor-search" type="text"
+        class="input input-bordered input-sm w-64"
+        placeholder="Search vendors..." />
+    </div>
+    <div class="form-control">
+      <label class="label py-0.5">
+        <span class="label-text text-xs uppercase
+          tracking-wide font-semibold opacity-50">
+          Per Page
+        </span>
+      </label>
+      <select id="per-page"
+        class="select select-bordered select-sm">
+        <option value="25" selected>25</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+      </select>
+    </div>
   </div>
 
-  <!-- Vendor Cards Grid -->
-  <div id="vendors-loading" class="flex justify-center py-12">
-    <span class="loading loading-spinner loading-lg"></span>
+  <!-- Loading -->
+  <div id="vendors-loading"
+    class="flex justify-center py-12">
+    <span class="loading loading-spinner loading-lg">
+    </span>
   </div>
-  <div id="vendors-empty" class="hidden text-center py-12 opacity-50">
+
+  <!-- Empty State -->
+  <div id="vendors-empty"
+    class="hidden text-center py-12 opacity-50">
     <p>No vendors found.</p>
   </div>
-  <div id="vendors-grid" class="hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
-</DashboardLayout>
 
-<style>
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(4px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  .fade-in {
-    animation: fadeIn 0.3s ease forwards;
-  }
-</style>
+  <!-- Table -->
+  <div id="vendors-table-wrap"
+    class="hidden overflow-x-auto bg-base-100
+           rounded-lg shadow-sm">
+    <table class="table table-sm w-full">
+      <thead>
+        <tr class="text-xs uppercase tracking-wide">
+          <th class="cursor-pointer"
+              data-sort="name">Vendor</th>
+          <th class="cursor-pointer text-right"
+              data-sort="invoices">Invoices</th>
+          <th class="cursor-pointer text-right"
+              data-sort="spend">Total Spend</th>
+          <th class="cursor-pointer"
+              data-sort="latest">Latest Invoice</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="vendors-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  <div id="pagination-wrap"
+    class="hidden flex items-center justify-between
+           mt-4 text-sm">
+    <span id="page-info" class="opacity-50"></span>
+    <div class="join">
+      <button id="btn-prev"
+        class="join-item btn btn-sm">Prev</button>
+      <button id="btn-next"
+        class="join-item btn btn-sm">Next</button>
+    </div>
+  </div>
+</DashboardLayout>
 
 <script>
   import { supabase } from '../lib/supabase';
 
-  // ─── Constants ──────────────────────────────────────────────────
-  const SUPABASE_URL = 'https://tcgptxbqqyxmvsaqiblc.supabase.co';
-  const SUPABASE_ANON_KEY =
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjZ3B0eGJxcXl4bXZzYXFpYmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzOTQwODksImV4cCI6MjA4NTk3MDA4OX0.nyTEkolz8sft-qFoHpwsLl4F4JkIEW7A3c8aPGftprc';
+  const FUNCTIONS_URL =
+    'https://tcgptxbqqyxmvsaqiblc.supabase.co' +
+    '/functions/v1';
 
-  // ─── Types ──────────────────────────────────────────────────────
-  interface VendorInvoice {
-    id: string;
-    total: number | null;
-    status: string;
-    created_at: string;
-  }
-
-  interface Vendor {
+  // ─── Types ──────────────────────────────────────
+  interface VendorRow {
     id: string;
     name: string;
-    normalized_name: string | null;
     created_at: string;
-    invoices: VendorInvoice[];
+    invoice_count: number;
+    total_spend: number;
+    latest_invoice: string | null;
+    pending: number;
+    approved: number;
+    rejected: number;
   }
 
-  // ─── State ──────────────────────────────────────────────────────
-  let allVendors: Vendor[] = [];
-  let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  // ─── State ──────────────────────────────────────
+  let currentPage = 1;
+  let currentSort = 'name';
+  let currentOrder = 'asc';
+  let totalPages = 1;
+  let totalVendors = 0;
+  let debounceTimer: ReturnType<typeof setTimeout>
+    | null = null;
 
-  // ─── DOM References ─────────────────────────────────────────────
-  const vendorSearch = document.getElementById('vendor-search') as HTMLInputElement;
-  const vendorsLoading = document.getElementById('vendors-loading')!;
-  const vendorsEmpty = document.getElementById('vendors-empty')!;
-  const vendorsGrid = document.getElementById('vendors-grid')!;
+  // ─── DOM refs ───────────────────────────────────
+  const searchInput = document.getElementById(
+    'vendor-search',
+  ) as HTMLInputElement;
+  const perPageSelect = document.getElementById(
+    'per-page',
+  ) as HTMLSelectElement;
+  const loading = document.getElementById(
+    'vendors-loading',
+  )!;
+  const empty = document.getElementById(
+    'vendors-empty',
+  )!;
+  const tableWrap = document.getElementById(
+    'vendors-table-wrap',
+  )!;
+  const tbody = document.getElementById(
+    'vendors-tbody',
+  )!;
+  const paginationWrap = document.getElementById(
+    'pagination-wrap',
+  )!;
+  const pageInfo = document.getElementById(
+    'page-info',
+  )!;
+  const btnPrev = document.getElementById(
+    'btn-prev',
+  ) as HTMLButtonElement;
+  const btnNext = document.getElementById(
+    'btn-next',
+  ) as HTMLButtonElement;
 
-  // ─── Formatters ─────────────────────────────────────────────────
-  const currencyFormatter = new Intl.NumberFormat('en-US', {
+  // ─── Formatters ─────────────────────────────────
+  const currFmt = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-
-  const dateFormatter = new Intl.DateTimeFormat('en-US', {
+  const dateFmt = new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   });
 
-  function formatCurrency(amount: number): string {
-    return currencyFormatter.format(amount);
+  function fmtCurrency(n: number): string {
+    return currFmt.format(n);
   }
-
-  function formatDate(dateStr: string): string {
+  function fmtDate(d: string): string {
     try {
-      return dateFormatter.format(new Date(dateStr));
+      return dateFmt.format(new Date(d));
     } catch {
-      return dateStr;
+      return d;
     }
   }
-
-  function escapeHtml(str: string): string {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+  function esc(s: string): string {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
   }
 
-  // ─── Status Badge ──────────────────────────────────────────────
-  function getStatusBadgeClass(status: string): string {
-    const map: Record<string, string> = {
-      pending: 'badge-warning',
-      approved: 'badge-success',
-      flagged: 'badge-error',
-      rejected: 'badge-error',
-      synced: 'badge-info',
-      error: 'badge-error',
-    };
-    return map[status] || 'badge-ghost';
-  }
-
-  // ─── Fetch Vendors ─────────────────────────────────────────────
+  // ─── Fetch ──────────────────────────────────────
   async function fetchVendors(): Promise<void> {
-    vendorsLoading.classList.remove('hidden');
-    vendorsEmpty.classList.add('hidden');
-    vendorsGrid.classList.add('hidden');
+    loading.classList.remove('hidden');
+    empty.classList.add('hidden');
+    tableWrap.classList.add('hidden');
+    paginationWrap.classList.add('hidden');
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
+      const sess = await supabase.auth.getSession();
+      const token = sess.data.session?.access_token;
+      if (!token) {
         window.location.href = '/login';
         return;
       }
 
-      const url = `${SUPABASE_URL}/rest/v1/vendors?select=id,name,normalized_name,created_at,invoices(id,total,status,created_at)&order=name.asc`;
-
-      const res = await fetch(url, {
-        headers: {
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
+      const params = new URLSearchParams({
+        page: String(currentPage),
+        limit: perPageSelect.value,
+        sort: currentSort,
+        order: currentOrder,
       });
+      const search = searchInput.value.trim();
+      if (search) params.set('search', search);
+
+      const res = await fetch(
+        `${FUNCTIONS_URL}/admin-vendors?${params}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        },
+      );
 
       if (!res.ok) {
-        // Handle gracefully if endpoint is not available
-        console.warn('Vendors endpoint returned', res.status);
-        allVendors = [];
-      } else {
-        const data = await res.json();
-        allVendors = Array.isArray(data) ? data : [];
+        console.warn(
+          'admin-vendors returned', res.status,
+        );
+        renderEmpty();
+        return;
       }
+
+      const data = await res.json();
+      const vendors: VendorRow[] =
+        data.vendors || [];
+      totalPages =
+        data.pagination?.total_pages || 1;
+      totalVendors =
+        data.pagination?.total || 0;
+
+      if (vendors.length === 0) {
+        renderEmpty();
+        return;
+      }
+
+      renderTable(vendors);
     } catch (err) {
       console.warn('Could not fetch vendors:', err);
-      allVendors = [];
+      renderEmpty();
     }
-
-    renderVendors(allVendors);
   }
 
-  // ─── Render Vendors ────────────────────────────────────────────
-  function renderVendors(vendors: Vendor[]): void {
-    vendorsLoading.classList.add('hidden');
+  // ─── Render ─────────────────────────────────────
+  function renderEmpty(): void {
+    loading.classList.add('hidden');
+    empty.classList.remove('hidden');
+    tableWrap.classList.add('hidden');
+    paginationWrap.classList.add('hidden');
+  }
 
-    if (vendors.length === 0) {
-      vendorsEmpty.classList.remove('hidden');
-      vendorsGrid.classList.add('hidden');
-      return;
-    }
+  function renderTable(
+    vendors: VendorRow[],
+  ): void {
+    loading.classList.add('hidden');
+    empty.classList.add('hidden');
+    tableWrap.classList.remove('hidden');
+    paginationWrap.classList.remove('hidden');
 
-    vendorsEmpty.classList.add('hidden');
-    vendorsGrid.classList.remove('hidden');
-    vendorsGrid.classList.add('fade-in');
-
-    vendorsGrid.innerHTML = vendors.map(vendor => {
-      const invoices = vendor.invoices || [];
-      const totalInvoices = invoices.length;
-      const totalSpend = invoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
-
-      // Find latest invoice date
-      let latestDate = '';
-      if (invoices.length > 0) {
-        const sorted = [...invoices].sort(
-          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    tbody.innerHTML = vendors.map((v) => {
+      const badges: string[] = [];
+      if (v.pending > 0) {
+        badges.push(
+          '<span class="badge badge-sm ' +
+          'badge-warning gap-1">' +
+          v.pending + ' pending</span>',
         );
-        latestDate = sorted[0].created_at;
+      }
+      if (v.approved > 0) {
+        badges.push(
+          '<span class="badge badge-sm ' +
+          'badge-success gap-1">' +
+          v.approved + ' approved</span>',
+        );
+      }
+      if (v.rejected > 0) {
+        badges.push(
+          '<span class="badge badge-sm ' +
+          'badge-error gap-1">' +
+          v.rejected + ' rejected</span>',
+        );
       }
 
-      // Count statuses
-      const pendingCount = invoices.filter(inv => inv.status === 'pending' || inv.status === 'flagged').length;
-      const approvedCount = invoices.filter(inv => inv.status === 'approved' || inv.status === 'synced').length;
-      const errorCount = invoices.filter(inv => inv.status === 'error' || inv.status === 'rejected').length;
-
-      return `
-        <div class="card bg-base-100 shadow-sm hover:shadow-md transition-shadow">
-          <div class="card-body p-5">
-            <h3 class="card-title text-lg">${escapeHtml(vendor.name)}</h3>
-
-            <div class="grid grid-cols-2 gap-3 mt-3">
-              <div>
-                <p class="text-xs uppercase tracking-wide opacity-50 font-semibold">Invoices</p>
-                <p class="text-xl font-bold mt-0.5">${totalInvoices}</p>
-              </div>
-              <div>
-                <p class="text-xs uppercase tracking-wide opacity-50 font-semibold">Total Spend</p>
-                <p class="text-xl font-bold mt-0.5">${formatCurrency(totalSpend)}</p>
-              </div>
-            </div>
-
-            ${latestDate ? `
-              <div class="mt-3">
-                <p class="text-xs uppercase tracking-wide opacity-50 font-semibold">Latest Invoice</p>
-                <p class="text-sm mt-0.5">${formatDate(latestDate)}</p>
-              </div>
-            ` : ''}
-
-            <div class="flex flex-wrap gap-2 mt-3">
-              ${pendingCount > 0 ? `<span class="badge badge-sm badge-warning gap-1">${pendingCount} pending</span>` : ''}
-              ${approvedCount > 0 ? `<span class="badge badge-sm badge-success gap-1">${approvedCount} approved</span>` : ''}
-              ${errorCount > 0 ? `<span class="badge badge-sm badge-error gap-1">${errorCount} rejected/error</span>` : ''}
-              ${totalInvoices === 0 ? `<span class="badge badge-sm badge-ghost">No invoices</span>` : ''}
-            </div>
+      return `<tr class="hover">
+        <td class="font-medium">
+          ${esc(v.name)}
+        </td>
+        <td class="text-right">
+          ${v.invoice_count}
+        </td>
+        <td class="text-right">
+          ${fmtCurrency(v.total_spend)}
+        </td>
+        <td>
+          ${v.latest_invoice
+            ? fmtDate(v.latest_invoice)
+            : '<span class="opacity-30">--</span>'}
+        </td>
+        <td>
+          <div class="flex flex-wrap gap-1">
+            ${badges.join('') ||
+              '<span class="opacity-30">--</span>'}
           </div>
-        </div>
-      `;
+        </td>
+      </tr>`;
     }).join('');
+
+    // Update pagination info
+    const perPage = parseInt(
+      perPageSelect.value, 10,
+    );
+    const start =
+      (currentPage - 1) * perPage + 1;
+    const end = Math.min(
+      currentPage * perPage,
+      totalVendors,
+    );
+    pageInfo.textContent =
+      `${start}-${end} of ${totalVendors} vendors`;
+    btnPrev.disabled = currentPage <= 1;
+    btnNext.disabled = currentPage >= totalPages;
   }
 
-  // ─── Search / Filter ───────────────────────────────────────────
-  function filterVendors(term: string): void {
-    const lower = term.toLowerCase().trim();
-    if (!lower) {
-      renderVendors(allVendors);
-      return;
-    }
-
-    const filtered = allVendors.filter(vendor => {
-      const name = (vendor.name || '').toLowerCase();
-      const normalized = (vendor.normalized_name || '').toLowerCase();
-      return name.includes(lower) || normalized.includes(lower);
+  // ─── Sort headers ───────────────────────────────
+  document
+    .querySelectorAll<HTMLElement>('[data-sort]')
+    .forEach((th) => {
+      th.addEventListener('click', () => {
+        const field = th.dataset.sort!;
+        if (currentSort === field) {
+          currentOrder =
+            currentOrder === 'asc'
+              ? 'desc'
+              : 'asc';
+        } else {
+          currentSort = field;
+          currentOrder = 'asc';
+        }
+        currentPage = 1;
+        fetchVendors();
+      });
     });
 
-    renderVendors(filtered);
-  }
-
-  vendorSearch.addEventListener('input', () => {
-    if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
-    searchDebounceTimer = setTimeout(() => {
-      filterVendors(vendorSearch.value);
-    }, 250);
+  // ─── Pagination buttons ─────────────────────────
+  btnPrev.addEventListener('click', () => {
+    if (currentPage > 1) {
+      currentPage--;
+      fetchVendors();
+    }
+  });
+  btnNext.addEventListener('click', () => {
+    if (currentPage < totalPages) {
+      currentPage++;
+      fetchVendors();
+    }
   });
 
-  // ─── Initial Load ──────────────────────────────────────────────
+  // ─── Search ─────────────────────────────────────
+  searchInput.addEventListener('input', () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      currentPage = 1;
+      fetchVendors();
+    }, 300);
+  });
+
+  // ─── Per-page change ────────────────────────────
+  perPageSelect.addEventListener('change', () => {
+    currentPage = 1;
+    fetchVendors();
+  });
+
+  // ─── Initial load ──────────────────────────────
   fetchVendors();
 </script>
