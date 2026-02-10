@@ -26,28 +26,28 @@ echo ""
 # --- Admin functions: function-level JWT + admin role auth ---
 # Deployed with --no-verify-jwt so the gateway doesn't block valid Supabase Auth tokens.
 # Each function verifies JWT + admin role itself via verifyJwt() + requireAdmin().
-echo "[1/13] Deploying admin-create-customer (JWT + admin auth)..."
+echo "[1/18] Deploying admin-create-customer (JWT + admin auth)..."
 supabase functions deploy admin-create-customer --no-verify-jwt
 
-echo "[2/13] Deploying admin-list-customers (JWT + admin auth)..."
+echo "[2/18] Deploying admin-list-customers (JWT + admin auth)..."
 supabase functions deploy admin-list-customers --no-verify-jwt
 
-echo "[3/13] Deploying admin-get-dashboard (JWT + admin auth)..."
+echo "[3/18] Deploying admin-get-dashboard (JWT + admin auth)..."
 supabase functions deploy admin-get-dashboard --no-verify-jwt
 
-echo "[4/13] Deploying admin-get-analytics (JWT + admin auth)..."
+echo "[4/18] Deploying admin-get-analytics (JWT + admin auth)..."
 supabase functions deploy admin-get-analytics --no-verify-jwt
 
-echo "[5/13] Deploying admin-approval-rules (JWT + admin auth)..."
+echo "[5/18] Deploying admin-approval-rules (JWT + admin auth)..."
 supabase functions deploy admin-approval-rules --no-verify-jwt
 
-echo "[6/13] Deploying approve-invoice (JWT + admin auth)..."
+echo "[6/18] Deploying approve-invoice (JWT + admin auth)..."
 supabase functions deploy approve-invoice --no-verify-jwt
 
-echo "[7/13] Deploying invoice-comments (JWT auth)..."
+echo "[7/18] Deploying invoice-comments (JWT auth)..."
 supabase functions deploy invoice-comments --no-verify-jwt
 
-echo "[8/13] Deploying admin-bulk-action (JWT + admin auth)..."
+echo "[8/18] Deploying admin-bulk-action (JWT + admin auth)..."
 supabase functions deploy admin-bulk-action --no-verify-jwt
 
 echo "[9/18] Deploying admin-accounting-sync (JWT + admin auth)..."
