@@ -26,62 +26,66 @@ echo ""
 # --- Admin functions: function-level JWT + admin role auth ---
 # Deployed with --no-verify-jwt so the gateway doesn't block valid Supabase Auth tokens.
 # Each function verifies JWT + admin role itself via verifyJwt() + requireAdmin().
-echo "[1/18] Deploying admin-create-customer (JWT + admin auth)..."
+echo "[1/19] Deploying admin-create-customer (JWT + admin auth)..."
 supabase functions deploy admin-create-customer --no-verify-jwt
 
-echo "[2/18] Deploying admin-list-customers (JWT + admin auth)..."
+echo "[2/19] Deploying admin-list-customers (JWT + admin auth)..."
 supabase functions deploy admin-list-customers --no-verify-jwt
 
-echo "[3/18] Deploying admin-get-dashboard (JWT + admin auth)..."
+echo "[3/19] Deploying admin-get-dashboard (JWT + admin auth)..."
 supabase functions deploy admin-get-dashboard --no-verify-jwt
 
-echo "[4/18] Deploying admin-get-analytics (JWT + admin auth)..."
+echo "[4/19] Deploying admin-get-analytics (JWT + admin auth)..."
 supabase functions deploy admin-get-analytics --no-verify-jwt
 
-echo "[5/18] Deploying admin-approval-rules (JWT + admin auth)..."
+echo "[5/19] Deploying admin-approval-rules (JWT + admin auth)..."
 supabase functions deploy admin-approval-rules --no-verify-jwt
 
-echo "[6/18] Deploying approve-invoice (JWT + admin auth)..."
+echo "[6/19] Deploying approve-invoice (JWT + admin auth)..."
 supabase functions deploy approve-invoice --no-verify-jwt
 
-echo "[7/18] Deploying invoice-comments (JWT auth)..."
+echo "[7/19] Deploying invoice-comments (JWT auth)..."
 supabase functions deploy invoice-comments --no-verify-jwt
 
-echo "[8/18] Deploying admin-bulk-action (JWT + admin auth)..."
+echo "[8/19] Deploying admin-bulk-action (JWT + admin auth)..."
 supabase functions deploy admin-bulk-action --no-verify-jwt
 
-echo "[9/18] Deploying admin-accounting-sync (JWT + admin auth)..."
+echo "[9/19] Deploying admin-accounting-sync (JWT + admin auth)..."
 supabase functions deploy admin-accounting-sync --no-verify-jwt
 
-echo "[10/18] Deploying admin-vendors (JWT + admin auth)..."
+echo "[10/19] Deploying admin-vendors (JWT + admin auth)..."
 supabase functions deploy admin-vendors --no-verify-jwt
 
 # --- Processing functions: API key auth at function level ---
 # These use --no-verify-jwt because n8n calls them with API keys, not Supabase JWTs.
 # Each function verifies the API key itself and scopes all queries to the customer.
-echo "[11/18] Deploying process-invoice (API key auth)..."
+echo "[11/19] Deploying process-invoice (API key auth)..."
 supabase functions deploy process-invoice --no-verify-jwt
 
-echo "[12/18] Deploying classify-invoice (API key auth)..."
+echo "[12/19] Deploying classify-invoice (API key auth)..."
 supabase functions deploy classify-invoice --no-verify-jwt
 
-echo "[13/18] Deploying extract-invoice (API key auth)..."
+echo "[13/19] Deploying extract-invoice (API key auth)..."
 supabase functions deploy extract-invoice --no-verify-jwt
 
-echo "[14/18] Deploying validate-invoice (API key auth)..."
+echo "[14/19] Deploying validate-invoice (API key auth)..."
 supabase functions deploy validate-invoice --no-verify-jwt
 
-echo "[15/18] Deploying build-slack-payload (API key auth)..."
+echo "[15/19] Deploying build-slack-payload (API key auth)..."
 supabase functions deploy build-slack-payload --no-verify-jwt
 
-echo "[16/18] Deploying build-quickbooks-payload (API key auth)..."
+echo "[16/19] Deploying build-quickbooks-payload (API key auth)..."
 supabase functions deploy build-quickbooks-payload --no-verify-jwt
 
-echo "[17/18] Deploying check-duplicate (API key auth)..."
+echo "[17/19] Deploying check-duplicate (API key auth)..."
 supabase functions deploy check-duplicate --no-verify-jwt
 
+# --- PDF viewer: JWT + admin auth ---
+echo "[18/19] Deploying get-invoice-pdf (JWT + admin auth)..."
+supabase functions deploy get-invoice-pdf --no-verify-jwt
+
 # --- Webhook functions: signature-based auth ---
-echo "[18/18] Deploying email-intake (webhook auth)..."
+echo "[19/19] Deploying email-intake (webhook auth)..."
 supabase functions deploy email-intake --no-verify-jwt
 
 echo ""

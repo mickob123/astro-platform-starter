@@ -471,6 +471,45 @@ Deno.serve(async (req: Request) => {
       .update({ invoice_id: invoiceData.id, step: "save_done" })
       .eq("id", logId);
 
+    // --- Step 4b: Upload PDF to Storage ---
+    let pdfStoragePath: string | null = null;
+
+    if (attachment_base64 &&
+        typeof attachment_base64 === "string" &&
+        attachment_base64.length <= 14_000_000) {
+      try {
+        const binaryStr = atob(attachment_base64);
+        const pdfBytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) {
+          pdfBytes[i] = binaryStr.charCodeAt(i);
+        }
+
+        pdfStoragePath = `${customerId}/${invoiceData.id}.pdf`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("invoice-pdfs")
+          .upload(pdfStoragePath, pdfBytes.buffer, {
+            contentType: "application/pdf",
+            cacheControl: "31536000",
+            upsert: false,
+          });
+
+        if (uploadError) {
+          console.error("PDF upload failed:", uploadError.message);
+          pdfStoragePath = null;
+        } else {
+          await supabase
+            .from("invoices")
+            .update({ pdf_storage_path: pdfStoragePath })
+            .eq("id", invoiceData.id);
+          console.log(`PDF uploaded: ${pdfStoragePath}`);
+        }
+      } catch (pdfUploadErr) {
+        console.error("PDF upload error (non-fatal):", pdfUploadErr);
+        pdfStoragePath = null;
+      }
+    }
+
     // --- Step 5: Send Slack notification ---
     const slackWebhookUrl = Deno.env.get("SLACK_WEBHOOK_URL");
     if (slackWebhookUrl) {
@@ -513,7 +552,7 @@ Deno.serve(async (req: Request) => {
         status: "success",
         step: "done",
         duration_ms: Date.now() - startTime,
-        output: { classification, extraction, validation: validationResult, invoice_id: invoiceData.id },
+        output: { classification, extraction, validation: validationResult, invoice_id: invoiceData.id, pdf_storage_path: pdfStoragePath },
       })
       .eq("id", logId);
 

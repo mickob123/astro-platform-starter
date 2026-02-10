@@ -217,6 +217,15 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
                 </svg>
                 Reject Invoice
               </button>
+              <!-- View PDF button (shown only when PDF is attached) -->
+              <div id="pdf-section" class="hidden border-t border-base-200 pt-3 mt-1">
+                <button id="btn-view-pdf" class="btn btn-outline btn-info w-full no-underline">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  View Invoice PDF
+                </button>
+              </div>
             </div>
             <!-- Action feedback -->
             <div id="action-feedback" class="hidden mt-3"></div>
@@ -313,6 +322,39 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
     </form>
   </dialog>
 
+  <!-- PDF Viewer Modal -->
+  <dialog id="pdf-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-5xl h-[85vh] flex flex-col p-0">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-base-200">
+        <h3 class="font-bold text-lg">Invoice PDF</h3>
+        <div class="flex items-center gap-2">
+          <a id="pdf-download-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-ghost no-underline">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Download
+          </a>
+          <form method="dialog">
+            <button class="btn btn-sm btn-ghost">Close</button>
+          </form>
+        </div>
+      </div>
+      <div id="pdf-loading" class="flex-1 flex items-center justify-center">
+        <span class="loading loading-spinner loading-lg text-primary"></span>
+      </div>
+      <iframe id="pdf-iframe" class="flex-1 w-full hidden" title="Invoice PDF"></iframe>
+      <div id="pdf-error" class="flex-1 flex items-center justify-center hidden">
+        <div class="text-center">
+          <p class="text-error font-medium">Failed to load PDF</p>
+          <p id="pdf-error-msg" class="text-sm text-base-content/50 mt-1"></p>
+        </div>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+      <button>close</button>
+    </form>
+  </dialog>
+
   <!-- Client-side logic -->
   <script>
     import { supabase, FUNCTIONS_URL } from '../../lib/supabase';
@@ -346,6 +388,7 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
       source_email_subject: string | null;
       source_email_from: string | null;
       raw_text: string | null;
+      pdf_storage_path: string | null;
       reviewed_by: string | null;
       reviewed_at: string | null;
       created_at: string;
@@ -565,6 +608,9 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
       // Review details
       renderReviewDetails(invoice);
 
+      // PDF section
+      renderPdfSection(invoice);
+
       // Enable/disable action buttons based on status
       const canAct = ['pending', 'flagged'].includes(invoice.status);
       (document.getElementById('btn-approve') as HTMLButtonElement).disabled = !canAct;
@@ -673,6 +719,80 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
         document.getElementById('reviewed-at')!.textContent = formatDateTime(invoice.reviewed_at);
       } else {
         reviewSection.classList.add('hidden');
+      }
+    }
+
+    function renderPdfSection(invoice: Invoice) {
+      const section = document.getElementById('pdf-section')!;
+      if (invoice.pdf_storage_path) {
+        section.classList.remove('hidden');
+      } else {
+        section.classList.add('hidden');
+      }
+    }
+
+    async function viewPdf() {
+      if (!currentInvoice) return;
+
+      const modal = document.getElementById('pdf-modal') as HTMLDialogElement;
+      const loading = document.getElementById('pdf-loading')!;
+      const iframe = document.getElementById('pdf-iframe') as HTMLIFrameElement;
+      const errorEl = document.getElementById('pdf-error')!;
+      const errorMsg = document.getElementById('pdf-error-msg')!;
+      const downloadLink = document.getElementById('pdf-download-link') as HTMLAnchorElement;
+
+      // Reset state
+      loading.classList.remove('hidden');
+      iframe.classList.add('hidden');
+      errorEl.classList.add('hidden');
+      iframe.src = '';
+      downloadLink.href = '#';
+
+      modal.showModal();
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          window.location.href = '/login';
+          return;
+        }
+
+        const res = await fetch(
+          `${FUNCTIONS_URL}/get-invoice-pdf?invoice_id=${encodeURIComponent(currentInvoice.id)}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+          }
+        );
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `Failed to load PDF (${res.status})`);
+        }
+
+        const data = await res.json();
+        const signedUrl = data.signed_url;
+
+        iframe.src = signedUrl;
+        downloadLink.href = signedUrl;
+
+        iframe.onload = () => {
+          loading.classList.add('hidden');
+          iframe.classList.remove('hidden');
+        };
+
+        // Fallback timeout in case iframe onload doesn't fire
+        setTimeout(() => {
+          if (!iframe.classList.contains('hidden')) return;
+          loading.classList.add('hidden');
+          iframe.classList.remove('hidden');
+        }, 3000);
+
+      } catch (err: any) {
+        loading.classList.add('hidden');
+        errorEl.classList.remove('hidden');
+        errorMsg.textContent = err.message || 'An unexpected error occurred.';
       }
     }
 
@@ -1162,6 +1282,11 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
 
     document.getElementById('btn-cancel-edit')?.addEventListener('click', () => {
       exitEditMode();
+    });
+
+    // --- PDF viewer event handler ---
+    document.getElementById('btn-view-pdf')?.addEventListener('click', () => {
+      viewPdf();
     });
 
     // --- Initialize page ---
