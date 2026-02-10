@@ -15,40 +15,15 @@
  *     so invoices are never silently lost
  *
  * PDF support:
- *   - Accepts base64-encoded PDF attachments via attachment_base64
- *   - Extracts text using unpdf (pdfjs-serverless)
- *   - Falls back to email_body if PDF extraction fails
+ *   - Accepts pre-extracted text via attachment_text
+ *     (extracted in n8n workflow using Node.js)
+ *   - Falls back to email_body if no attachment text
  */
 
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { verifyApiKey, AuthError } from "../_shared/auth.ts";
 import { withRetry } from "../_shared/retry.ts";
 import OpenAI from "https://esm.sh/openai@4.52.0";
-import {
-  getDocumentProxy,
-  extractText as extractPdfText,
-} from "https://esm.sh/unpdf@0.12.1";
-
-/**
- * Decode a base64-encoded PDF and extract its text.
- * Uses getDocumentProxy → extractText (correct unpdf API).
- */
-async function pdfBase64ToText(
-  base64Data: string,
-): Promise<string> {
-  const binaryStr = atob(base64Data);
-  const bytes = new Uint8Array(binaryStr.length);
-  for (let i = 0; i < binaryStr.length; i++) {
-    bytes[i] = binaryStr.charCodeAt(i);
-  }
-  const pdf = await getDocumentProxy(
-    new Uint8Array(bytes.buffer),
-  );
-  const { text } = await extractPdfText(pdf, {
-    mergePages: true,
-  });
-  return text;
-}
 
 const CLASSIFY_PROMPT = `You are an invoice classification system. Analyze the provided email content and determine if it represents a real vendor invoice.
 
@@ -108,22 +83,15 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // --- Extract text from PDF attachment if provided ---
-    // Priority: attachment_text (pre-extracted) > attachment_base64 (PDF to extract) > email_body
-    let resolvedAttachmentText = attachment_text || null;
-    if (!resolvedAttachmentText && attachment_base64) {
-      try {
-        // Limit base64 size to ~10MB PDF (base64 is ~33% larger than binary)
-        if (typeof attachment_base64 !== "string" || attachment_base64.length > 14_000_000) {
-          console.warn("attachment_base64 too large, skipping PDF extraction");
-        } else {
-          console.log("Extracting text from base64 PDF attachment...");
-          resolvedAttachmentText = await pdfBase64ToText(attachment_base64);
-          console.log(`PDF text extracted: ${resolvedAttachmentText.length} characters`);
-        }
-      } catch (pdfErr) {
-        console.error("PDF text extraction failed (will fall back to email body):", pdfErr);
-      }
+    // --- Resolve attachment text ---
+    // PDF text extraction is done in n8n (Node.js) and
+    // sent as attachment_text. attachment_base64 is kept
+    // for logging only.
+    const resolvedAttachmentText = attachment_text || null;
+    if (resolvedAttachmentText) {
+      console.log(`Received pre-extracted attachment text: ${resolvedAttachmentText.length} chars`);
+    } else if (attachment_base64) {
+      console.warn("Received attachment_base64 but no attachment_text — PDF text was not extracted upstream");
     }
 
     // Guard against oversized payloads that could cause excessive API costs
