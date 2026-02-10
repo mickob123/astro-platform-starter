@@ -24,18 +24,29 @@ import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { verifyApiKey, AuthError } from "../_shared/auth.ts";
 import { withRetry } from "../_shared/retry.ts";
 import OpenAI from "https://esm.sh/openai@4.52.0";
-import { extractText as extractPdfText } from "https://esm.sh/unpdf@0.12.1";
+import {
+  getDocumentProxy,
+  extractText as extractPdfText,
+} from "https://esm.sh/unpdf@0.12.1";
 
 /**
- * Decode a base64-encoded PDF and extract its text content.
+ * Decode a base64-encoded PDF and extract its text.
+ * Uses getDocumentProxy → extractText (correct unpdf API).
  */
-async function pdfBase64ToText(base64Data: string): Promise<string> {
+async function pdfBase64ToText(
+  base64Data: string,
+): Promise<string> {
   const binaryStr = atob(base64Data);
   const bytes = new Uint8Array(binaryStr.length);
   for (let i = 0; i < binaryStr.length; i++) {
     bytes[i] = binaryStr.charCodeAt(i);
   }
-  const { text } = await extractPdfText(bytes, { mergePages: true });
+  const pdf = await getDocumentProxy(
+    new Uint8Array(bytes.buffer),
+  );
+  const { text } = await extractPdfText(pdf, {
+    mergePages: true,
+  });
   return text;
 }
 
@@ -154,7 +165,7 @@ Deno.serve(async (req: Request) => {
 
     const classification = await withRetry(async () => {
       const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: CLASSIFY_PROMPT },
           { role: "user", content: userContent },
@@ -202,13 +213,20 @@ Deno.serve(async (req: Request) => {
       .update({ step: "extract" })
       .eq("id", logId);
 
+    // Build extraction context: always include subject
+    // for maximum context even if PDF extraction failed
     const documentText = resolvedAttachmentText || email_body;
+    const extractionInput = [
+      `Email Subject: ${email_subject}`,
+      `\nDocument Content:\n${documentText}`,
+    ].join("\n");
+
     const extraction = await withRetry(async () => {
       const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: EXTRACT_PROMPT },
-          { role: "user", content: documentText },
+          { role: "user", content: extractionInput },
         ],
         response_format: { type: "json_object" },
         temperature: 0,
