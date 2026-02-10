@@ -136,7 +136,21 @@ async function extractTextFromPdf(
 }
 
 /**
+ * Run a promise with a timeout. Returns null on timeout.
+ */
+function withTimeout<T>(
+  p: Promise<T>,
+  ms: number,
+): Promise<T | null> {
+  return Promise.race([
+    p,
+    new Promise<null>((res) => setTimeout(() => res(null), ms)),
+  ]);
+}
+
+/**
  * Decode base64 PDF and extract text.
+ * Has a 8-second timeout to avoid hanging the function.
  */
 async function pdfBase64ToText(
   base64Data: string,
@@ -146,7 +160,11 @@ async function pdfBase64ToText(
   for (let i = 0; i < binaryStr.length; i++) {
     bytes[i] = binaryStr.charCodeAt(i);
   }
-  return await extractTextFromPdf(bytes);
+  const result = await withTimeout(
+    extractTextFromPdf(bytes),
+    8000,
+  );
+  return result || "";
 }
 
 const CLASSIFY_PROMPT = `You are an invoice classification system. Analyze the provided email content and determine if it represents a real vendor invoice.
