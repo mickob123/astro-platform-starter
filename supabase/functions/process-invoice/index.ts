@@ -184,11 +184,16 @@ Respond with a JSON object containing exactly these fields:
 - due_date: string or null (YYYY-MM-DD)
 - currency: string (ISO 4217)
 - line_items: array of {description, quantity, unit_price, total}
-- subtotal: number
-- tax: number or null
-- total: number
+- subtotal: number (sum of line item totals BEFORE tax)
+- tax: number or null (GST/VAT amount, 0 if no tax)
+- total: number (final amount = subtotal + tax)
 
-All dates YYYY-MM-DD. All monetary values as numbers. Missing optional fields must be null.`;
+CRITICAL RULES:
+- total MUST equal subtotal + tax. Verify this before responding.
+- If the invoice shows a "total" or "amount due", use that as the total and work backwards to find subtotal and tax.
+- If tax is included in prices, set tax to the tax amount and subtotal to (total - tax).
+- All dates YYYY-MM-DD. All monetary values as numbers (no currency symbols).
+- Missing optional fields must be null.`;
 
 const MATH_TOLERANCE = 0.01;
 
