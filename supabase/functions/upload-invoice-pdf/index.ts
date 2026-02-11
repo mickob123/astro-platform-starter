@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
 
   try {
     // --- Auth ---
-    const { customerId } = await verifyApiKey(req);
+    const { customer_id: customerId } = await verifyApiKey(req);
 
     // --- Params ---
     const url = new URL(req.url);
@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
     if (err instanceof AuthError) {
       return new Response(
         JSON.stringify({ error: err.message }),
-        { status: err.statusCode, headers: { ...headers, "Content-Type": "application/json" } },
+        { status: err.status, headers: { ...headers, "Content-Type": "application/json" } },
       );
     }
     console.error("upload-invoice-pdf error:", err);
