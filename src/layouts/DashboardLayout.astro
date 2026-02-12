@@ -30,14 +30,15 @@ const { title } = Astro.props;
 
     <div class="navbar bg-base-100 shadow-md px-4">
       <div class="flex-1">
-        <a href="/dashboard" class="text-xl font-bold no-underline text-base-content hover:opacity-100">
+        <a href="/dashboard" class="text-lg sm:text-xl font-bold no-underline text-base-content hover:opacity-100">
           Invoice Dashboard
         </a>
       </div>
-      <div class="flex-none gap-2 items-center">
-        <a href="/dashboard" class="btn btn-ghost btn-sm no-underline">Dashboard</a>
-        <a href="/vendors" class="btn btn-ghost btn-sm no-underline">Vendors</a>
-        <a href="/settings" class="btn btn-ghost btn-sm no-underline">Settings</a>
+      <div class="flex-none gap-1 sm:gap-2 items-center">
+        <!-- Desktop nav links (hidden on mobile) -->
+        <a href="/dashboard" class="btn btn-ghost btn-sm no-underline hidden md:inline-flex">Dashboard</a>
+        <a href="/vendors" class="btn btn-ghost btn-sm no-underline hidden md:inline-flex">Vendors</a>
+        <a href="/settings" class="btn btn-ghost btn-sm no-underline hidden md:inline-flex">Settings</a>
 
         <!-- Notification Bell -->
         <div class="dropdown dropdown-end" id="notification-dropdown">
@@ -60,20 +61,37 @@ const { title } = Astro.props;
           </div>
         </div>
 
-        <button id="logout-btn" class="btn btn-ghost btn-sm text-error">Logout</button>
+        <button id="logout-btn" class="btn btn-ghost btn-sm text-error hidden md:inline-flex">Logout</button>
+
+        <!-- Mobile hamburger menu (visible on mobile only) -->
+        <div class="dropdown dropdown-end md:hidden">
+          <label tabindex="0" class="btn btn-ghost btn-sm btn-square">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </label>
+          <ul tabindex="0" class="dropdown-content z-[1] menu menu-sm p-2 shadow-lg bg-base-100 rounded-box w-52 mt-2 border border-base-200">
+            <li><a href="/dashboard" class="no-underline">Dashboard</a></li>
+            <li><a href="/vendors" class="no-underline">Vendors</a></li>
+            <li><a href="/settings" class="no-underline">Settings</a></li>
+            <li><button id="mobile-logout-btn" class="text-error">Logout</button></li>
+          </ul>
+        </div>
       </div>
     </div>
 
-    <main class="max-w-7xl mx-auto px-4 py-6">
+    <main class="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
       <slot />
     </main>
 
     <script>
       import { supabase } from '../lib/supabase';
-      document.getElementById('logout-btn')?.addEventListener('click', async () => {
+      const logoutHandler = async () => {
         await supabase.auth.signOut();
         window.location.href = '/login';
-      });
+      };
+      document.getElementById('logout-btn')?.addEventListener('click', logoutHandler);
+      document.getElementById('mobile-logout-btn')?.addEventListener('click', logoutHandler);
 
       // Notification bell logic
       const badge = document.getElementById('notification-badge')!;

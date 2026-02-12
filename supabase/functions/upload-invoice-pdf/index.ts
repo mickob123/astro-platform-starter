@@ -90,6 +90,17 @@ Deno.serve(async (req) => {
 
     if (uploadError) {
       console.error("Storage upload failed:", uploadError.message);
+      // Log failure for monitoring
+      await supabase.from("processing_logs").insert({
+        customer_id: customerId,
+        invoice_id: invoiceId,
+        status: "error",
+        step: "pdf_upload",
+        error_message: `PDF upload failed: ${uploadError.message}`,
+        input: { storage_path: storagePath, size_bytes: pdfBytes.length },
+      }).then(({ error: logErr }) => {
+        if (logErr) console.error("Failed to log upload error:", logErr.message);
+      });
       return new Response(
         JSON.stringify({ error: "Upload failed" }),
         { status: 500, headers: { ...headers, "Content-Type": "application/json" } },
@@ -116,6 +127,18 @@ Deno.serve(async (req) => {
       );
     }
     console.error("upload-invoice-pdf error:", err);
+    // Best-effort log to processing_logs for monitoring
+    try {
+      const logSupabase = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+      await logSupabase.from("processing_logs").insert({
+        status: "error",
+        step: "pdf_upload",
+        error_message: `upload-invoice-pdf error: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    } catch { /* ignore logging failures */ }
     return new Response(
       JSON.stringify({ error: "Internal error" }),
       { status: 500, headers: { ...headers, "Content-Type": "application/json" } },

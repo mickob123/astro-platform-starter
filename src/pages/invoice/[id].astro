@@ -91,21 +91,21 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
                 <p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Due Date</p>
                 <p class="font-semibold mt-0.5" id="detail-due-date">--</p>
               </div>
-              <div>
+              <div class="min-w-0">
                 <p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Customer ID</p>
-                <p class="font-mono text-sm mt-0.5" id="detail-customer">--</p>
+                <p class="font-mono text-sm mt-0.5 truncate" id="detail-customer">--</p>
               </div>
               <div>
                 <p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Vendor</p>
                 <p class="font-mono text-sm mt-0.5" id="detail-vendor">--</p>
               </div>
-              <div>
+              <div class="min-w-0">
                 <p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Source Email From</p>
-                <p class="text-sm mt-0.5" id="detail-email-from">--</p>
+                <p class="text-sm mt-0.5 break-all" id="detail-email-from">--</p>
               </div>
-              <div>
+              <div class="min-w-0">
                 <p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Source Email Subject</p>
-                <p class="text-sm mt-0.5" id="detail-email-subject">--</p>
+                <p class="text-sm mt-0.5 break-words" id="detail-email-subject">--</p>
               </div>
               <div>
                 <p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Created</p>
@@ -123,18 +123,18 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
         <div class="card bg-base-100 shadow-sm">
           <div class="card-body">
             <h2 class="card-title text-lg mb-4">Totals</h2>
-            <div class="grid grid-cols-3 gap-4">
-              <div class="text-center p-4 bg-base-200 rounded-lg">
-                <p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Subtotal</p>
-                <p class="text-xl font-bold mt-1" id="detail-subtotal">--</p>
+            <div class="grid grid-cols-3 gap-2 sm:gap-4">
+              <div class="text-center p-2 sm:p-4 bg-base-200 rounded-lg">
+                <p class="text-[10px] sm:text-xs text-base-content/50 uppercase tracking-wide font-medium">Subtotal</p>
+                <p class="text-base sm:text-xl font-bold mt-1 truncate" id="detail-subtotal">--</p>
               </div>
-              <div class="text-center p-4 bg-base-200 rounded-lg">
-                <p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Tax</p>
-                <p class="text-xl font-bold mt-1" id="detail-tax">--</p>
+              <div class="text-center p-2 sm:p-4 bg-base-200 rounded-lg">
+                <p class="text-[10px] sm:text-xs text-base-content/50 uppercase tracking-wide font-medium">Tax</p>
+                <p class="text-base sm:text-xl font-bold mt-1 truncate" id="detail-tax">--</p>
               </div>
-              <div class="text-center p-4 bg-primary/10 rounded-lg border-2 border-primary/20">
-                <p class="text-xs text-primary uppercase tracking-wide font-medium">Total</p>
-                <p class="text-xl font-bold mt-1 text-primary" id="detail-total">--</p>
+              <div class="text-center p-2 sm:p-4 bg-primary/10 rounded-lg border-2 border-primary/20">
+                <p class="text-[10px] sm:text-xs text-primary uppercase tracking-wide font-medium">Total</p>
+                <p class="text-base sm:text-xl font-bold mt-1 text-primary truncate" id="detail-total">--</p>
               </div>
             </div>
           </div>
@@ -184,13 +184,13 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
 
             <!-- Comment input -->
             <div class="border-t border-base-200 pt-3">
-              <div class="flex gap-2">
-                <textarea id="comment-input" class="textarea textarea-bordered flex-1 text-sm" placeholder="Add a comment... Use @name to mention someone" rows="2"></textarea>
-                <button id="btn-send-comment" class="btn btn-primary btn-sm self-end" disabled>
+              <div class="flex flex-col sm:flex-row gap-2">
+                <textarea id="comment-input" class="textarea textarea-bordered flex-1 text-sm" placeholder="Add a comment..." rows="2"></textarea>
+                <button id="btn-send-comment" class="btn btn-primary btn-sm self-end w-full sm:w-auto" disabled>
                   Send
                 </button>
               </div>
-              <p class="text-xs opacity-40 mt-1">Press Cmd+Enter to send</p>
+              <p class="text-xs opacity-40 mt-1 hidden sm:block">Press Cmd+Enter to send</p>
             </div>
           </div>
         </div>
@@ -324,15 +324,15 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
 
   <!-- PDF Viewer Modal -->
   <dialog id="pdf-modal" class="modal">
-    <div class="modal-box w-11/12 max-w-5xl h-[85vh] flex flex-col p-0">
-      <div class="flex items-center justify-between px-4 py-3 border-b border-base-200">
-        <h3 class="font-bold text-lg">Invoice PDF</h3>
-        <div class="flex items-center gap-2">
+    <div class="modal-box w-[calc(100%-1rem)] sm:w-11/12 max-w-5xl h-[95vh] sm:h-[85vh] flex flex-col p-0">
+      <div class="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 border-b border-base-200">
+        <h3 class="font-bold text-base sm:text-lg">Invoice PDF</h3>
+        <div class="flex items-center gap-1 sm:gap-2">
           <a id="pdf-download-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-ghost no-underline">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            Download
+            <span class="hidden sm:inline">Download</span>
           </a>
           <form method="dialog">
             <button class="btn btn-sm btn-ghost">Close</button>
@@ -344,7 +344,7 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
       </div>
       <iframe id="pdf-iframe" class="flex-1 w-full hidden" title="Invoice PDF"></iframe>
       <div id="pdf-error" class="flex-1 flex items-center justify-center hidden">
-        <div class="text-center">
+        <div class="text-center px-4">
           <p class="text-error font-medium">Failed to load PDF</p>
           <p id="pdf-error-msg" class="text-sm text-base-content/50 mt-1"></p>
         </div>

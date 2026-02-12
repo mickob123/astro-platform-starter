@@ -5,35 +5,35 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
 
 <DashboardLayout title="Dashboard">
   <!-- ===== Summary Stats Cards (4 cards) ===== -->
-  <div id="stats-section" class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-2">
+  <div id="stats-section" class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-2">
     <div class="card bg-base-100 shadow-sm">
-      <div class="card-body p-4">
-        <p class="text-xs uppercase tracking-wide opacity-60 font-semibold">Needs Review</p>
-        <p id="stat-needs-review" class="text-2xl font-bold mt-1 text-warning">
+      <div class="card-body p-3 sm:p-4">
+        <p class="text-[10px] sm:text-xs uppercase tracking-wide opacity-60 font-semibold">Needs Review</p>
+        <p id="stat-needs-review" class="text-xl sm:text-2xl font-bold mt-1 text-warning">
           <span class="loading loading-dots loading-sm"></span>
         </p>
       </div>
     </div>
     <div class="card bg-base-100 shadow-sm">
-      <div class="card-body p-4">
-        <p class="text-xs uppercase tracking-wide opacity-60 font-semibold">Approved</p>
-        <p id="stat-approved" class="text-2xl font-bold mt-1 text-success">
+      <div class="card-body p-3 sm:p-4">
+        <p class="text-[10px] sm:text-xs uppercase tracking-wide opacity-60 font-semibold">Approved</p>
+        <p id="stat-approved" class="text-xl sm:text-2xl font-bold mt-1 text-success">
           <span class="loading loading-dots loading-sm"></span>
         </p>
       </div>
     </div>
     <div class="card bg-base-100 shadow-sm">
-      <div class="card-body p-4">
-        <p class="text-xs uppercase tracking-wide opacity-60 font-semibold">Amount Awaiting Approval</p>
-        <p id="stat-amount-awaiting" class="text-2xl font-bold mt-1 text-info">
+      <div class="card-body p-3 sm:p-4">
+        <p class="text-[10px] sm:text-xs uppercase tracking-wide opacity-60 font-semibold leading-tight">Amount Awaiting</p>
+        <p id="stat-amount-awaiting" class="text-xl sm:text-2xl font-bold mt-1 text-info truncate">
           <span class="loading loading-dots loading-sm"></span>
         </p>
       </div>
     </div>
     <div class="card bg-base-100 shadow-sm">
-      <div class="card-body p-4">
-        <p class="text-xs uppercase tracking-wide opacity-60 font-semibold">Amount Approved</p>
-        <p id="stat-amount-approved" class="text-2xl font-bold mt-1 text-success">
+      <div class="card-body p-3 sm:p-4">
+        <p class="text-[10px] sm:text-xs uppercase tracking-wide opacity-60 font-semibold">Amt Approved</p>
+        <p id="stat-amount-approved" class="text-xl sm:text-2xl font-bold mt-1 text-success truncate">
           <span class="loading loading-dots loading-sm"></span>
         </p>
       </div>
@@ -91,7 +91,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   </details>
 
   <!-- ===== Time Range Preset Buttons ===== -->
-  <div class="flex gap-2 mb-4" id="time-range-buttons">
+  <div class="flex flex-wrap gap-2 mb-4" id="time-range-buttons">
     <button class="btn btn-sm" data-range="today">Today</button>
     <button class="btn btn-sm" data-range="week">This Week</button>
     <button class="btn btn-sm" data-range="month">This Month</button>
@@ -101,9 +101,10 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   <!-- ===== Filters & Search Bar ===== -->
   <div class="card bg-base-100 shadow-sm mb-6">
     <div class="card-body p-4">
-      <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
-        <!-- Search -->
-        <div class="form-control w-full sm:w-auto sm:flex-1">
+      <!-- Mobile: 2-col grid for compact filters. Desktop: flex row -->
+      <div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-3 items-start sm:items-end">
+        <!-- Search (full width on all) -->
+        <div class="form-control col-span-2 sm:flex-1 sm:min-w-[180px]">
           <label class="label py-1">
             <span class="label-text text-xs font-semibold uppercase tracking-wide opacity-60">Search</span>
           </label>
@@ -116,7 +117,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
         </div>
 
         <!-- Status Filter -->
-        <div class="form-control w-full sm:w-48">
+        <div class="form-control sm:w-48">
           <label class="label py-1">
             <span class="label-text text-xs font-semibold uppercase tracking-wide opacity-60">Status</span>
           </label>
@@ -132,7 +133,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
         </div>
 
         <!-- Sort -->
-        <div class="form-control w-full sm:w-48">
+        <div class="form-control sm:w-48">
           <label class="label py-1">
             <span class="label-text text-xs font-semibold uppercase tracking-wide opacity-60">Sort By</span>
           </label>
@@ -145,7 +146,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
         </div>
 
         <!-- Per-page limit -->
-        <div class="form-control w-full sm:w-32">
+        <div class="form-control sm:w-32">
           <label class="label py-1">
             <span class="label-text text-xs font-semibold uppercase tracking-wide opacity-60">Per Page</span>
           </label>
@@ -157,11 +158,11 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
           </select>
         </div>
 
-        <!-- Vendor Group Toggle -->
-        <button id="toggle-vendor-group" class="btn btn-sm btn-outline">Group by Vendor</button>
-
-        <!-- Export CSV -->
-        <button id="export-csv" class="btn btn-sm btn-outline">Export CSV</button>
+        <!-- Vendor Group Toggle & Export CSV -->
+        <div class="flex gap-2 col-span-2 sm:w-auto">
+          <button id="toggle-vendor-group" class="btn btn-sm btn-outline flex-1 sm:flex-none">Group by Vendor</button>
+          <button id="export-csv" class="btn btn-sm btn-outline flex-1 sm:flex-none">Export CSV</button>
+        </div>
       </div>
     </div>
   </div>
@@ -219,12 +220,16 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   </div>
 
   <!-- ===== Bulk Actions Bar ===== -->
-  <div id="bulk-actions" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 bg-base-300 rounded-box shadow-xl p-3 flex items-center gap-3 z-50">
-    <span id="bulk-count">0 selected</span>
-    <button id="bulk-approve" class="btn btn-sm btn-success">Approve Selected</button>
-    <button id="bulk-reject" class="btn btn-sm btn-error">Reject Selected</button>
-    <button id="bulk-cancel" class="btn btn-sm btn-ghost">Cancel</button>
+  <div id="bulk-actions" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 bg-base-300 rounded-box shadow-xl p-3 flex flex-wrap items-center justify-center gap-2 sm:gap-3 z-50 w-[calc(100%-2rem)] sm:w-auto max-w-lg">
+    <span id="bulk-count" class="text-sm font-medium w-full text-center sm:w-auto">0 selected</span>
+    <button id="bulk-approve" class="btn btn-sm btn-success flex-1 sm:flex-none min-w-0">Approve</button>
+    <button id="bulk-reject" class="btn btn-sm btn-error flex-1 sm:flex-none min-w-0">Reject</button>
+    <button id="bulk-delete" class="btn btn-sm btn-warning btn-outline flex-1 sm:flex-none min-w-0">Delete</button>
+    <button id="bulk-cancel" class="btn btn-sm btn-ghost flex-1 sm:flex-none min-w-0">Cancel</button>
   </div>
+
+  <!-- ===== Toast Notification Container ===== -->
+  <div id="toast-container" class="toast toast-top toast-end z-[100]"></div>
 
   <!-- ===== Pagination ===== -->
   <div id="pagination-section" class="hidden mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -236,7 +241,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
         </svg>
         Prev
       </button>
-      <div id="page-numbers" class="join-item flex">
+      <div id="page-numbers" class="join-item hidden sm:flex">
         <!-- Page buttons injected by JS -->
       </div>
       <button id="page-next" class="join-item btn btn-sm no-underline">
@@ -291,6 +296,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   const FUNCTIONS_URL = 'https://tcgptxbqqyxmvsaqiblc.supabase.co/functions/v1';
   const API_BASE = `${FUNCTIONS_URL}/admin-get-dashboard`;
   const APPROVE_URL = `${FUNCTIONS_URL}/approve-invoice`;
+  const BULK_ACTION_URL = `${FUNCTIONS_URL}/admin-bulk-action`;
 
   // ─── State ────────────────────────────────────────────────────────
   let currentPage = 1;
@@ -335,6 +341,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   const bulkCountEl = document.getElementById('bulk-count')!;
   const bulkApproveBtn = document.getElementById('bulk-approve')!;
   const bulkRejectBtn = document.getElementById('bulk-reject')!;
+  const bulkDeleteBtn = document.getElementById('bulk-delete')!;
   const bulkCancelBtn = document.getElementById('bulk-cancel')!;
 
   const exportCsvBtn = document.getElementById('export-csv')!;
@@ -454,6 +461,59 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     }
   }
 
+  // ─── Bulk Action API (single request for multiple invoices) ────────
+  async function callBulkActionEndpoint(
+    action: 'approve' | 'reject' | 'delete' | 'export_csv',
+    invoiceIds: string[]
+  ): Promise<Response> {
+    const token = await getAuthToken();
+    if (!token) {
+      window.location.href = '/login';
+      throw new Error('Not authenticated');
+    }
+
+    const response = await fetch(BULK_ACTION_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ action, invoice_ids: invoiceIds }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`Bulk action API error ${response.status}: ${errorBody}`);
+    }
+
+    return response;
+  }
+
+  // ─── Toast Notifications ───────────────────────────────────────────
+  function showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
+    const toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) return;
+
+    const alertClass = type === 'success' ? 'alert-success' : type === 'error' ? 'alert-error' : 'alert-info';
+    const toast = document.createElement('div');
+    toast.className = `alert ${alertClass} shadow-lg text-sm transition-all duration-300 opacity-0 translate-y-2`;
+    toast.innerHTML = `<span>${escapeHtml(message)}</span>`;
+    toastContainer.appendChild(toast);
+
+    // Trigger entrance animation
+    requestAnimationFrame(() => {
+      toast.classList.remove('opacity-0', 'translate-y-2');
+      toast.classList.add('opacity-100', 'translate-y-0');
+    });
+
+    // Auto-dismiss after 4 seconds
+    setTimeout(() => {
+      toast.classList.remove('opacity-100', 'translate-y-0');
+      toast.classList.add('opacity-0', 'translate-y-2');
+      setTimeout(() => toast.remove(), 300);
+    }, 4000);
+  }
+
   // ─── Quick Action (single row approve/reject) ─────────────────────
   (window as any).quickAction = async function(invoiceId: string, action: 'approve' | 'reject') {
     try {
@@ -558,17 +618,17 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     const isChecked = selectedInvoices.has(inv.id) ? 'checked' : '';
 
     const actionsHtml = isPendingOrFlagged
-      ? `<td class="flex gap-1">
+      ? `<td><div class="flex gap-1">
            <button onclick="event.stopPropagation(); quickAction('${inv.id}', 'approve')" class="btn btn-xs btn-success btn-outline" title="Approve">\u2713</button>
            <button onclick="event.stopPropagation(); quickAction('${inv.id}', 'reject')" class="btn btn-xs btn-error btn-outline" title="Reject">\u2717</button>
-         </td>`
+         </div></td>`
       : `<td></td>`;
 
     return `
       <tr onclick="window.location.href='/invoice/${inv.id}'" class="border-b border-base-200/50 hover:bg-base-200/50 cursor-pointer transition-colors">
         <td onclick="event.stopPropagation()"><input type="checkbox" class="checkbox checkbox-sm row-checkbox" data-invoice-id="${inv.id}" ${isChecked} /></td>
         <td class="font-mono text-sm font-medium">${escapeHtml(inv.invoice_number || '--')}</td>
-        <td class="max-w-[200px] truncate">${escapeHtml(vendorDisplay)}</td>
+        <td class="max-w-[120px] sm:max-w-[200px] truncate">${escapeHtml(vendorDisplay)}</td>
         <td class="font-mono font-medium">${formatCurrency(inv.total)}</td>
         <td class="hidden sm:table-cell text-sm">${formatDate(inv.invoice_date)}</td>
         <td class="hidden md:table-cell text-sm">${formatDate(inv.due_date)}</td>
@@ -762,7 +822,34 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   }
 
   // ─── CSV Export ───────────────────────────────────────────────────
-  function exportCsv() {
+  async function exportCsv() {
+    // If invoices are selected, use the server-side bulk export for full-fidelity CSV
+    if (selectedInvoices.size > 0) {
+      const ids = Array.from(selectedInvoices);
+      try {
+        showToast(`Exporting ${ids.length} selected invoice${ids.length !== 1 ? 's' : ''}...`, 'info');
+        const response = await callBulkActionEndpoint('export_csv', ids);
+        const csvText = await response.text();
+
+        const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `invoices-export-${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        showToast(`Exported ${ids.length} invoice${ids.length !== 1 ? 's' : ''} successfully.`, 'success');
+      } catch (err: any) {
+        console.error('Server CSV export error:', err);
+        showToast(`CSV export failed: ${err.message}`, 'error');
+      }
+      return;
+    }
+
+    // Fall back to client-side export for the current filtered view
     const filtered = applyClientFilters(allInvoices);
     const headers = ['invoice_number', 'vendor', 'amount', 'date', 'due_date', 'status', 'confidence'];
     const rows = filtered.map((inv) => {
@@ -814,24 +901,39 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   }
 
   // ─── Bulk Action Handlers ─────────────────────────────────────────
-  async function executeBulkAction(action: 'approve' | 'reject') {
+  async function executeBulkAction(action: 'approve' | 'reject' | 'delete') {
     if (selectedInvoices.size === 0) return;
 
     const ids = Array.from(selectedInvoices);
-    const confirmMsg = `Are you sure you want to ${action} ${ids.length} invoice${ids.length !== 1 ? 's' : ''}?`;
+    const actionLabel = action === 'delete' ? 'delete' : action;
+    const confirmMsg = `Are you sure you want to ${actionLabel} ${ids.length} invoice${ids.length !== 1 ? 's' : ''}?`;
     if (!confirm(confirmMsg)) return;
 
     try {
-      for (const id of ids) {
-        await callApproveEndpoint(id, action);
-      }
+      const response = await callBulkActionEndpoint(action, ids);
+      const result = await response.json();
+
       selectedInvoices.clear();
       selectAllCheckbox.checked = false;
       updateBulkUI();
+
+      // Show feedback via toast
+      if (result.errors && result.errors.length > 0) {
+        showToast(
+          `${result.processed} invoice${result.processed !== 1 ? 's' : ''} ${actionLabel}d. ${result.errors.length} failed.`,
+          result.processed > 0 ? 'info' : 'error'
+        );
+      } else {
+        showToast(
+          `${result.processed} invoice${result.processed !== 1 ? 's' : ''} ${actionLabel}d successfully.`,
+          'success'
+        );
+      }
+
       await loadDashboard();
     } catch (err: any) {
       console.error(`Bulk ${action} error:`, err);
-      alert(`Failed to ${action} some invoices: ${err.message}`);
+      showToast(`Failed to ${actionLabel} invoices: ${err.message}`, 'error');
       await loadDashboard();
     }
   }
@@ -914,6 +1016,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   // Bulk action buttons
   bulkApproveBtn.addEventListener('click', () => executeBulkAction('approve'));
   bulkRejectBtn.addEventListener('click', () => executeBulkAction('reject'));
+  bulkDeleteBtn.addEventListener('click', () => executeBulkAction('delete'));
   bulkCancelBtn.addEventListener('click', () => {
     selectedInvoices.clear();
     selectAllCheckbox.checked = false;
@@ -923,7 +1026,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   });
 
   // CSV Export
-  exportCsvBtn.addEventListener('click', () => exportCsv());
+  exportCsvBtn.addEventListener('click', () => { exportCsv(); });
 
   // Vendor Group Toggle
   toggleVendorGroupBtn.addEventListener('click', () => {

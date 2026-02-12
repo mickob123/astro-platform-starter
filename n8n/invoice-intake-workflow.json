@@ -303,6 +303,43 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [3000, 208]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the Process Invoice response to extract invoice data\nconst processNode = $('Process Invoice').first();\nlet body = processNode.json.body || processNode.json;\n\n// Handle body as string (n8n may not auto-parse)\nif (typeof body === 'string') {\n  try { body = JSON.parse(body); } catch (e) { body = {}; }\n}\n\nconst invoiceId = body.invoice_id || 'unknown';\nconst vendor = body.vendor || 'Unknown Vendor';\nconst amount = body.amount || 0;\nconst currency = body.currency || 'USD';\nconst dueDate = body.due_date || 'Not specified';\nconst invoiceNumber = body.invoice_number || 'N/A';\nconst confidence = typeof body.confidence === 'number' ? body.confidence : 0;\n\n// Build invoice URL\nconst invoiceUrl = 'https://refundrescue.netlify.app/invoice/' + invoiceId;\n\n// Format currency\nconst formattedAmount = new Intl.NumberFormat('en-US', {\n  style: 'currency',\n  currency: currency,\n}).format(amount);\n\n// Confidence display\nconst confidencePercent = Math.round(confidence * 100);\nconst confidenceEmoji = confidence >= 0.9 ? ':white_check_mark:' : confidence >= 0.7 ? ':large_yellow_circle:' : ':warning:';\nconst confidenceLabel = confidence >= 0.9 ? 'High' : confidence >= 0.7 ? 'Medium' : 'Low';\n\n// Build Slack Block Kit payload\nconst blocks = [\n  {\n    type: 'header',\n    text: { type: 'plain_text', text: ':page_facing_up: New Invoice Received', emoji: true },\n  },\n  {\n    type: 'section',\n    fields: [\n      { type: 'mrkdwn', text: '*Vendor:*\\n' + vendor },\n      { type: 'mrkdwn', text: '*Invoice #:*\\n' + invoiceNumber },\n      { type: 'mrkdwn', text: '*Amount:*\\n' + formattedAmount },\n      { type: 'mrkdwn', text: '*Due Date:*\\n' + dueDate },\n    ],\n  },\n  {\n    type: 'section',\n    text: { type: 'mrkdwn', text: confidenceEmoji + ' *Confidence:* ' + confidenceLabel + ' (' + confidencePercent + '%)' },\n    accessory: {\n      type: 'button',\n      text: { type: 'plain_text', text: 'View Invoice', emoji: true },\n      url: invoiceUrl,\n      action_id: 'view_invoice',\n    },\n  },\n  { type: 'divider' },\n  {\n    type: 'actions',\n    elements: [\n      {\n        type: 'button',\n        text: { type: 'plain_text', text: ':white_check_mark: Approve', emoji: true },\n        style: 'primary',\n        action_id: 'approve_invoice',\n        value: invoiceNumber,\n      },\n      {\n        type: 'button',\n        text: { type: 'plain_text', text: ':triangular_flag_on_post: Flag for Review', emoji: true },\n        style: 'danger',\n        action_id: 'flag_invoice',\n        value: invoiceNumber,\n      },\n    ],\n  },\n];\n\nreturn [{\n  json: {\n    blocks: blocks,\n  },\n}];"
+      },
+      "id": "build-slack-payload",
+      "name": "Build Slack Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2500, -50]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ blocks: $json.blocks }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "send-slack-notification",
+      "name": "Send Slack Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2750, -50],
+      "continueOnFail": true
     }
   ],
   "connections": {
@@ -424,6 +461,22 @@
         [
           {
             "node": "Prepare PDF Upload",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Slack Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Slack Payload": {
+      "main": [
+        [
+          {
+            "node": "Send Slack Notification",
             "type": "main",
             "index": 0
           }

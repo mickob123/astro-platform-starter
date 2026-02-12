@@ -372,6 +372,38 @@ Deno.serve(async (req: Request) => {
       .update({ output: { classification, extraction }, step: "extract_done" })
       .eq("id", logId);
 
+    // --- Step 2b: Duplicate check ---
+    await supabase
+      .from("processing_logs")
+      .update({ step: "duplicate_check" })
+      .eq("id", logId);
+
+    const duplicateResult = await checkDuplicate(supabase, customerId!, extraction);
+
+    if (duplicateResult.is_duplicate && duplicateResult.confidence >= 1.0) {
+      // Definite duplicate — skip processing entirely
+      await supabase
+        .from("processing_logs")
+        .update({
+          status: "success",
+          step: "duplicate_skipped",
+          output: { classification, extraction, duplicate: duplicateResult, result: "duplicate" },
+          duration_ms: Date.now() - startTime,
+        })
+        .eq("id", logId);
+
+      return new Response(
+        JSON.stringify({
+          status: "duplicate",
+          reason: duplicateResult.reason,
+          confidence: duplicateResult.confidence,
+          matches: duplicateResult.matches,
+          log_id: logId,
+        }),
+        { status: 200, headers: { ...headers, "Content-Type": "application/json" } },
+      );
+    }
+
     // --- Step 3: Validate ---
     await supabase
       .from("processing_logs")
@@ -389,6 +421,13 @@ Deno.serve(async (req: Request) => {
     );
 
     const validationResult = validateInvoice(extraction, existingNumbers);
+
+    // If high-confidence fuzzy duplicate, add warning (but don't block)
+    if (duplicateResult.is_duplicate && duplicateResult.confidence >= 0.8) {
+      validationResult.warnings.push(
+        `Potential duplicate detected (${Math.round(duplicateResult.confidence * 100)}% confidence): ${duplicateResult.reason}`,
+      );
+    }
 
     await supabase
       .from("processing_logs")
@@ -646,15 +685,110 @@ function validateInvoice(
     warnings.push("No line items present");
   } else {
     const lineItemsTotal = lineItems.reduce((sum, item) => sum + item.total, 0);
-    const lineItemsDiff = Math.abs(lineItemsTotal - (invoice.subtotal as number));
-    if (lineItemsDiff > MATH_TOLERANCE) {
+    const lineItemsDiffSubtotal = Math.abs(lineItemsTotal - (invoice.subtotal as number));
+    const lineItemsDiffTotal = Math.abs(lineItemsTotal - (invoice.total as number));
+    if (lineItemsDiffSubtotal > MATH_TOLERANCE && lineItemsDiffTotal > MATH_TOLERANCE) {
       warnings.push(
-        `Line items total (${lineItemsTotal.toFixed(2)}) does not match subtotal (${invoice.subtotal})`,
+        `Line items total (${lineItemsTotal.toFixed(2)}) does not match subtotal (${invoice.subtotal}) or total (${invoice.total})`,
       );
     }
   }
 
   return { is_valid: errors.length === 0, errors, warnings };
+}
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+async function checkDuplicate(
+  supabase: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
+  customerId: string,
+  extraction: Record<string, unknown>,
+): Promise<{ is_duplicate: boolean; confidence: number; matches: Array<{ id: string; confidence: number; reason: string }>; reason: string }> {
+  const matches: Array<{ id: string; confidence: number; reason: string }> = [];
+  const invoiceNumber = extraction.invoice_number as string | undefined;
+  const total = extraction.total as number;
+  const invoiceDate = extraction.invoice_date as string | undefined;
+  const vendorName = extraction.vendor_name as string | undefined;
+
+  // Resolve vendor_id
+  let vendorId: string | null = null;
+  if (vendorName) {
+    const normalizedName = vendorName.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-");
+    const { data: vendorData } = await supabase
+      .from("vendors")
+      .select("id")
+      .eq("customer_id", customerId)
+      .eq("normalized_name", normalizedName)
+      .single();
+    vendorId = vendorData?.id || null;
+  }
+
+  // Check 1: Exact invoice_number match
+  if (invoiceNumber && invoiceNumber.trim() !== "") {
+    let query = supabase
+      .from("invoices")
+      .select("id, invoice_number, total, invoice_date, vendor_id")
+      .eq("customer_id", customerId)
+      .eq("invoice_number", invoiceNumber);
+    if (vendorId) query = query.eq("vendor_id", vendorId);
+
+    const { data: exactMatches } = await query;
+    if (exactMatches && exactMatches.length > 0) {
+      for (const inv of exactMatches) {
+        matches.push({
+          id: inv.id,
+          confidence: 1.0,
+          reason: vendorId ? "Exact invoice number match from same vendor" : "Exact invoice number match",
+        });
+      }
+    }
+  }
+
+  // Fuzzy checks require vendor_id and invoice_date
+  if (vendorId && invoiceDate) {
+    const invoiceDateMs = new Date(invoiceDate).getTime();
+    const windowStart = new Date(invoiceDateMs - 30 * MS_PER_DAY).toISOString().split("T")[0];
+    const windowEnd = new Date(invoiceDateMs + 30 * MS_PER_DAY).toISOString().split("T")[0];
+
+    const { data: candidates } = await supabase
+      .from("invoices")
+      .select("id, invoice_number, total, invoice_date, vendor_id")
+      .eq("customer_id", customerId)
+      .eq("vendor_id", vendorId)
+      .gte("invoice_date", windowStart)
+      .lte("invoice_date", windowEnd);
+
+    if (candidates) {
+      for (const inv of candidates) {
+        if (matches.some((m) => m.id === inv.id)) continue;
+        const candidateDateMs = new Date(inv.invoice_date).getTime();
+        const daysDiff = Math.abs(invoiceDateMs - candidateDateMs) / MS_PER_DAY;
+        const amountDiffPct = inv.total > 0 ? Math.abs(inv.total - total) / inv.total : (total === 0 ? 0 : 1);
+
+        if (inv.total === total && daysDiff === 0) {
+          matches.push({ id: inv.id, confidence: 0.95, reason: "Same vendor, same total, and same invoice date" });
+        } else if (inv.total === total && daysDiff <= 7) {
+          matches.push({ id: inv.id, confidence: 0.80, reason: `Same vendor and total, dates ${daysDiff.toFixed(0)} days apart` });
+        } else if (amountDiffPct <= 0.01 && daysDiff <= 30) {
+          matches.push({ id: inv.id, confidence: 0.60, reason: `Same vendor, total within 1%, dates ${daysDiff.toFixed(0)} days apart` });
+        }
+      }
+    }
+  }
+
+  matches.sort((a, b) => b.confidence - a.confidence);
+  const highestConfidence = matches.length > 0 ? matches[0].confidence : 0;
+
+  return {
+    is_duplicate: highestConfidence >= 0.6,
+    confidence: highestConfidence,
+    matches,
+    reason: matches.length === 0
+      ? "No duplicate matches found"
+      : matches.length === 1
+        ? matches[0].reason
+        : `${matches.length} potential matches found. Strongest: ${matches[0].reason}`,
+  };
 }
 
 function buildSlackBlocks(data: {
