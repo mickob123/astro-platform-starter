@@ -15,7 +15,10 @@
  *     so invoices are never silently lost
  *
  * PDF support:
- *   - Accepts base64-encoded PDF via attachment_base64
+ *   - Accepts PDF via pdf_storage_path (Supabase Storage path, preferred for large files)
+ *   - Also accepts base64-encoded PDF via attachment_base64 (fallback)
+ *   - If pdf_storage_path is provided, downloads from storage, converts to base64,
+ *     then deletes the temp file after download
  *   - PRIMARY: sends PDF base64 to GPT-4o vision API for visual extraction
  *     (handles all PDF types reliably — scanned, complex layouts, etc.)
  *   - FALLBACK: text-based DecompressionStream extraction for when
@@ -27,6 +30,7 @@
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { verifyApiKey, AuthError } from "../_shared/auth.ts";
 import { withRetry } from "../_shared/retry.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import OpenAI from "https://esm.sh/openai@4.52.0";
 
 /**
@@ -169,6 +173,20 @@ async function pdfBase64ToText(
   return result || "";
 }
 
+/**
+ * Convert a Uint8Array to base64 using chunked approach
+ * to avoid stack overflow on large files.
+ */
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
 const CLASSIFY_PROMPT = `You are an invoice classification system. Analyze the provided email content and any attached document image to determine if it represents a real vendor invoice.
 
 If a document image is attached, use it as the PRIMARY source for classification — it contains the actual invoice PDF rendered visually.
@@ -227,7 +245,45 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json();
-    const { email_subject, email_body, attachment_text, attachment_base64, metadata } = body;
+    const { email_subject, email_body, attachment_text, attachment_base64: rawAttachmentBase64, pdf_storage_path, metadata } = body;
+
+    // --- Resolve attachment_base64: from storage path or direct ---
+    let attachment_base64 = rawAttachmentBase64 || null;
+
+    if (pdf_storage_path && typeof pdf_storage_path === "string" && pdf_storage_path.length > 0) {
+      console.log(`Downloading PDF from storage: ${pdf_storage_path}`);
+      try {
+        const adminSupabase = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+        );
+
+        const { data: fileData, error: downloadError } = await adminSupabase.storage
+          .from("invoice-pdfs")
+          .download(pdf_storage_path);
+
+        if (downloadError) {
+          console.error(`Storage download failed: ${downloadError.message}`);
+        } else if (fileData) {
+          const arrayBuffer = await fileData.arrayBuffer();
+          const bytes = new Uint8Array(arrayBuffer);
+          attachment_base64 = uint8ArrayToBase64(bytes);
+          console.log(`PDF downloaded from storage: ${bytes.length} bytes -> ${attachment_base64.length} chars base64`);
+
+          // Clean up temp file from storage
+          const { error: deleteError } = await adminSupabase.storage
+            .from("invoice-pdfs")
+            .remove([pdf_storage_path]);
+          if (deleteError) {
+            console.warn(`Failed to delete temp storage file ${pdf_storage_path}: ${deleteError.message}`);
+          } else {
+            console.log(`Temp storage file deleted: ${pdf_storage_path}`);
+          }
+        }
+      } catch (storageErr) {
+        console.error("Storage download error (falling back to other methods):", storageErr);
+      }
+    }
 
     if (!email_subject || !email_body) {
       return new Response(
@@ -309,6 +365,7 @@ Deno.serve(async (req: Request) => {
           email_body,
           attachment_text: resolvedAttachmentText || null,
           had_pdf_attachment: !!attachment_base64,
+          pdf_source: pdf_storage_path ? "storage" : (rawAttachmentBase64 ? "base64" : "none"),
         },
       })
       .select("id")
