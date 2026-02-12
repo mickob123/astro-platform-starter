@@ -46,8 +46,8 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // --- Summary stats ---
-    let summaryQuery = supabase.from("invoices").select("id, total, status");
+    // --- Summary stats (exclude soft-deleted invoices) ---
+    let summaryQuery = supabase.from("invoices").select("id, total, status").neq("status", "deleted");
     if (dateFrom) {
       summaryQuery = summaryQuery.gte("created_at", dateFrom);
     }
@@ -74,7 +74,7 @@ Deno.serve(async (req: Request) => {
       (log: { status?: string }) => log.status === "error",
     ).length;
 
-    // --- Paginated invoices ---
+    // --- Paginated invoices (exclude soft-deleted unless explicitly filtered) ---
     const offset = (page - 1) * limit;
     let invoiceQuery = supabase
       .from("invoices")
@@ -88,6 +88,9 @@ Deno.serve(async (req: Request) => {
     }
     if (statusFilter) {
       invoiceQuery = invoiceQuery.eq("status", statusFilter);
+    } else {
+      // By default, exclude deleted invoices from the listing
+      invoiceQuery = invoiceQuery.neq("status", "deleted");
     }
     if (dateFrom) {
       invoiceQuery = invoiceQuery.gte("created_at", dateFrom);
