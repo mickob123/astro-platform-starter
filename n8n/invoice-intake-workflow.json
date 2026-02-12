@@ -149,7 +149,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ email_subject: $json.email_subject, email_body: $json.email_body, metadata: $json.metadata }) }}",
+        "jsonBody": "={{ JSON.stringify({ email_subject: $json.email_subject, email_body: $json.email_body, attachment_base64: $json.attachment_base64 || null, metadata: $json.metadata }) }}",
         "options": {
           "response": {
             "response": {
