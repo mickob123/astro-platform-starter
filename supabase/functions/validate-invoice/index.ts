@@ -88,10 +88,11 @@ Deno.serve(async (req: Request) => {
         (sum: number, item: { total: number }) => sum + item.total,
         0,
       );
-      const lineItemsDiff = Math.abs(lineItemsTotal - invoice.subtotal);
-      if (lineItemsDiff > MATH_TOLERANCE) {
+      const lineItemsDiffSubtotal = Math.abs(lineItemsTotal - invoice.subtotal);
+      const lineItemsDiffTotal = Math.abs(lineItemsTotal - invoice.total);
+      if (lineItemsDiffSubtotal > MATH_TOLERANCE && lineItemsDiffTotal > MATH_TOLERANCE) {
         warnings.push(
-          `Line items total (${lineItemsTotal.toFixed(2)}) does not match subtotal (${invoice.subtotal})`,
+          `Line items total (${lineItemsTotal.toFixed(2)}) does not match subtotal (${invoice.subtotal}) or total (${invoice.total})`,
         );
       }
     }

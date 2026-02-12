@@ -16,10 +16,12 @@
  *
  * PDF support:
  *   - Accepts base64-encoded PDF via attachment_base64
- *   - Extracts text using Deno's native DecompressionStream
- *     (web standard API, no external libraries)
+ *   - PRIMARY: sends PDF base64 to GPT-4o vision API for visual extraction
+ *     (handles all PDF types reliably — scanned, complex layouts, etc.)
+ *   - FALLBACK: text-based DecompressionStream extraction for when
+ *     vision is unavailable or attachment_base64 is missing
  *   - Also accepts pre-extracted text via attachment_text
- *   - Falls back to email_body if extraction fails
+ *   - Falls back to email_body if all extraction methods fail
  */
 
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
@@ -167,7 +169,9 @@ async function pdfBase64ToText(
   return result || "";
 }
 
-const CLASSIFY_PROMPT = `You are an invoice classification system. Analyze the provided email content and determine if it represents a real vendor invoice.
+const CLASSIFY_PROMPT = `You are an invoice classification system. Analyze the provided email content and any attached document image to determine if it represents a real vendor invoice.
+
+If a document image is attached, use it as the PRIMARY source for classification — it contains the actual invoice PDF rendered visually.
 
 Respond with a JSON object containing:
 - is_invoice: boolean - true if this is a legitimate vendor invoice
@@ -176,6 +180,8 @@ Respond with a JSON object containing:
 - signals: array of strings - detected indicators`;
 
 const EXTRACT_PROMPT = `You are an invoice data extraction system. Extract structured data from the provided invoice document.
+
+If a document image is attached, use it as the PRIMARY source for extraction — it contains the actual invoice PDF rendered visually. Read all values directly from the document image. The email text is secondary context only.
 
 Respond with a JSON object containing exactly these fields:
 - vendor_name: string
@@ -230,28 +236,52 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // --- Extract text from PDF attachment ---
-    // Priority: attachment_text (pre-extracted) >
-    //   attachment_base64 (extract here) > email_body
+    // --- Prepare PDF attachment for processing ---
+    // PRIMARY: If attachment_base64 is available, send it to GPT-4o vision
+    // FALLBACK: Text extraction via DecompressionStream (unreliable for complex PDFs)
     let resolvedAttachmentText = attachment_text || null;
 
-    if (!resolvedAttachmentText && attachment_base64) {
+    // Validate and prepare PDF base64 for vision API
+    const hasPdfForVision = !!(
+      attachment_base64 &&
+      typeof attachment_base64 === "string" &&
+      attachment_base64.length > 0 &&
+      attachment_base64.length <= 14_000_000
+    );
+
+    // Truncate base64 for vision API if needed (limit ~5MB to control API costs)
+    // 5MB binary = ~6.67MB base64
+    const MAX_BASE64_FOR_VISION = 7_000_000;
+    const pdfBase64ForVision = hasPdfForVision
+      ? (attachment_base64.length <= MAX_BASE64_FOR_VISION
+          ? attachment_base64
+          : attachment_base64.substring(0, MAX_BASE64_FOR_VISION))
+      : null;
+
+    if (hasPdfForVision) {
+      console.log(`PDF available for GPT-4o vision: ${attachment_base64.length} chars base64`);
+      if (attachment_base64.length > MAX_BASE64_FOR_VISION) {
+        console.log(`Truncated to ${MAX_BASE64_FOR_VISION} chars for vision API`);
+      }
+    }
+
+    // Fallback text extraction (used when vision is not available)
+    if (!resolvedAttachmentText && attachment_base64 && !hasPdfForVision) {
+      // PDF too large for vision — try text extraction as last resort
+      console.warn("attachment_base64 too large for vision API, skipping");
+    } else if (!resolvedAttachmentText && attachment_base64 && hasPdfForVision) {
+      // Also extract text as supplementary context (non-blocking)
       try {
-        if (typeof attachment_base64 !== "string" ||
-            attachment_base64.length > 14_000_000) {
-          console.warn("attachment_base64 too large");
+        console.log("Extracting PDF text as fallback context...");
+        const extracted = await pdfBase64ToText(attachment_base64);
+        if (extracted && extracted.length > 20) {
+          resolvedAttachmentText = extracted;
+          console.log(`PDF fallback text extracted: ${extracted.length} chars`);
         } else {
-          console.log("Extracting PDF text via DecompressionStream...");
-          const extracted = await pdfBase64ToText(attachment_base64);
-          if (extracted && extracted.length > 20) {
-            resolvedAttachmentText = extracted;
-            console.log(`PDF text extracted: ${extracted.length} chars`);
-          } else {
-            console.warn("PDF extraction returned minimal text");
-          }
+          console.warn("PDF text extraction returned minimal text (vision will be primary)");
         }
       } catch (pdfErr) {
-        console.error("PDF extraction failed:", pdfErr);
+        console.warn("PDF text extraction failed (vision will be primary):", pdfErr);
       }
     } else if (resolvedAttachmentText) {
       console.log(`Using pre-extracted text: ${resolvedAttachmentText.length} chars`);
@@ -290,16 +320,38 @@ Deno.serve(async (req: Request) => {
     // --- Step 1: Classify ---
     const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
 
-    const userContent = `Email Subject: ${email_subject}\n\nEmail Body:\n${email_body}\n\n${
-      resolvedAttachmentText ? `Attachment Content:\n${resolvedAttachmentText}` : "No attachment content available."
+    // Build classify messages: use vision when PDF is available
+    const classifyTextContent = `Email Subject: ${email_subject}\n\nEmail Body:\n${email_body}\n\n${
+      resolvedAttachmentText ? `Attachment Text (fallback):\n${resolvedAttachmentText}` : "No attachment text available."
     }`;
+
+    // deno-lint-ignore no-explicit-any
+    let classifyUserMessage: any;
+    if (pdfBase64ForVision) {
+      console.log("Classify step: using GPT-4o vision with PDF image");
+      classifyUserMessage = {
+        role: "user",
+        content: [
+          { type: "text", text: `${classifyTextContent}\n\nThe attached document image is the actual invoice PDF. Use it as primary source.` },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:application/pdf;base64,${pdfBase64ForVision}`,
+              detail: "high",
+            },
+          },
+        ],
+      };
+    } else {
+      classifyUserMessage = { role: "user", content: classifyTextContent };
+    }
 
     const classification = await withRetry(async () => {
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
           { role: "system", content: CLASSIFY_PROMPT },
-          { role: "user", content: userContent },
+          classifyUserMessage,
         ],
         response_format: { type: "json_object" },
         temperature: 0,
@@ -347,17 +399,46 @@ Deno.serve(async (req: Request) => {
     // Build extraction context: always include subject
     // for maximum context even if PDF extraction failed
     const documentText = resolvedAttachmentText || email_body;
-    const extractionInput = [
+    const extractionTextContent = [
       `Email Subject: ${email_subject}`,
       `\nDocument Content:\n${documentText}`,
     ].join("\n");
+
+    // Build extract messages: use vision when PDF is available (primary path)
+    // deno-lint-ignore no-explicit-any
+    let extractUserMessage: any;
+    if (pdfBase64ForVision) {
+      console.log("Extract step: using GPT-4o vision with PDF image (primary)");
+      extractUserMessage = {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: `Email Subject: ${email_subject}\n\nExtract invoice data from the attached PDF document image. The image below is the actual invoice — read all values directly from it.\n\n${
+              resolvedAttachmentText
+                ? `Supplementary text (for reference only, prefer the image):\n${resolvedAttachmentText}`
+                : "No supplementary text available."
+            }`,
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:application/pdf;base64,${pdfBase64ForVision}`,
+              detail: "high",
+            },
+          },
+        ],
+      };
+    } else {
+      extractUserMessage = { role: "user", content: extractionTextContent };
+    }
 
     const extraction = await withRetry(async () => {
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
           { role: "system", content: EXTRACT_PROMPT },
-          { role: "user", content: extractionInput },
+          extractUserMessage,
         ],
         response_format: { type: "json_object" },
         temperature: 0,

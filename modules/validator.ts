@@ -89,10 +89,11 @@ export function validateInvoice(input: ValidatorInput): ValidatorOutput {
     (sum, item) => sum + item.total,
     0
   );
-  const lineItemsDifference = Math.abs(lineItemsTotal - invoice.subtotal);
-  if (invoice.line_items.length > 0 && lineItemsDifference > MATH_TOLERANCE) {
+  const lineItemsDiffSubtotal = Math.abs(lineItemsTotal - invoice.subtotal);
+  const lineItemsDiffTotal = Math.abs(lineItemsTotal - invoice.total);
+  if (invoice.line_items.length > 0 && lineItemsDiffSubtotal > MATH_TOLERANCE && lineItemsDiffTotal > MATH_TOLERANCE) {
     warnings.push(
-      `Line items total (${lineItemsTotal.toFixed(2)}) does not match subtotal (${invoice.subtotal})`
+      `Line items total (${lineItemsTotal.toFixed(2)}) does not match subtotal (${invoice.subtotal}) or total (${invoice.total})`
     );
   }
 
