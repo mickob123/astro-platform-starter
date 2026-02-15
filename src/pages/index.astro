@@ -1,21 +1,64 @@
 ---
-import Layout from '../layouts/Layout.astro';
-import ContextAlert from '../components/ContextAlert.astro';
-import Markdown from '../components/Markdown.astro';
+export const prerender = false;
 
-const explainer = `
-An Astro website can go way beyond static pages - on the right platform.
-
-Netlify supports not only [Streaming SSR](https://docs.astro.build/en/guides/server-side-rendering/#html-streaming) and fast [Edge Middleware](https://docs.astro.build/en/guides/middleware/), but also [on-demand revalidation](https://www.netlify.com/blog/cache-tags-and-purge-api-on-netlify/) and [stale-while-revalidate](https://www.netlify.com/blog/swr-and-fine-grained-cache-control/). 
-Any page or data can be rebuilt only when needed, without site visitors ever getting a performance hit.
-`;
+import '../styles/globals.css';
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/800.css';
 ---
 
-<Layout title="Welcome to Astro.">
-    <ContextAlert class="mb-4" />
-    <h1 class="mb-10">Netlify Platform Starter for Astro</h1>
-    <Markdown content={explainer} class="text-lg mb-10" />
-    <p class="mb-8">
-        <a href="https://docs.netlify.com/frameworks/astro/" class="btn btn-lg btn-primary sm:btn-wide">Read the Docs</a>
-    </p>
-</Layout>
+<!doctype html>
+<html lang="en" data-theme="lofi">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Invoice Dashboard</title>
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body class="min-h-screen bg-base-200 flex items-center justify-center">
+    <span class="loading loading-spinner loading-lg"></span>
+
+    <script>
+      import { supabase, FUNCTIONS_URL, getAccessToken } from '../lib/supabase';
+
+      async function route() {
+        const token = await getAccessToken();
+        if (!token) {
+          window.location.href = '/login';
+          return;
+        }
+
+        // Check onboarding status via edge function (bypasses RLS)
+        try {
+          const res = await fetch(`${FUNCTIONS_URL}/onboarding-state`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data.completed || data.current_step === 'completed') {
+              window.location.href = '/dashboard';
+              return;
+            }
+          }
+        } catch {
+          // If the check fails, fall through to onboarding
+        }
+
+        // If onboarding not complete or check failed, go to onboarding
+        const { data: { session } } = await supabase.auth.getSession();
+        const customerId = session?.user?.app_metadata?.customer_id;
+        if (customerId) {
+          window.location.href = '/onboarding';
+        } else {
+          // No customer_id means they need to register properly
+          window.location.href = '/signup';
+        }
+      }
+
+      route();
+    </script>
+  </body>
+</html>

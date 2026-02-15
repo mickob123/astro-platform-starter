@@ -1,0 +1,1460 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+---
+
+<DashboardLayout title="Invoice Detail">
+
+  <!-- Back button + Breadcrumb -->
+  <div class="flex items-center gap-3 mb-4">
+    <a href="/dashboard" class="btn btn-sm btn-ghost gap-1 no-underline">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+      Back
+    </a>
+    <div class="text-sm breadcrumbs">
+      <ul>
+        <li><a href="/dashboard" class="no-underline text-base-content/60 hover:text-base-content">Dashboard</a></li>
+        <li class="text-base-content font-medium" id="breadcrumb-invoice">Invoice</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div id="loading-state" class="flex flex-col items-center justify-center py-24 gap-4">
+    <span class="loading loading-spinner loading-lg text-primary"></span>
+    <p class="text-base-content/60">Loading invoice details...</p>
+  </div>
+
+  <!-- Error State -->
+  <div id="error-state" class="hidden">
+    <div class="alert alert-error shadow-md">
+      <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <div>
+        <h3 class="font-bold">Failed to load invoice</h3>
+        <p id="error-message" class="text-sm">An unexpected error occurred.</p>
+      </div>
+      <a href="/dashboard" class="btn btn-sm btn-ghost no-underline">Back to Dashboard</a>
+    </div>
+  </div>
+
+  <!-- Invoice Detail Content (hidden until loaded) -->
+  <div id="invoice-content" class="hidden">
+
+    <!-- Header row: Invoice number + status -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+      <div>
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight" id="invoice-title">Invoice</h1>
+        <p class="text-base-content/50 text-sm mt-1" id="invoice-subtitle"></p>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="status-badge" class="badge badge-lg font-semibold"></span>
+        <span id="valid-badge" class="badge badge-lg"></span>
+      </div>
+    </div>
+
+    <!-- Two-column layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- Left column: Invoice details (2/3 width) -->
+      <div class="lg:col-span-2 flex flex-col gap-6">
+
+        <!-- Invoice Info Card -->
+        <div class="card bg-base-100 shadow-sm">
+          <div class="card-body">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="card-title text-lg">Invoice Information</h2>
+              <div class="flex gap-2">
+                <button id="btn-edit-invoice" class="btn btn-ghost btn-xs">Edit</button>
+                <button id="btn-save-invoice" class="btn btn-primary btn-xs hidden">Save</button>
+                <button id="btn-cancel-edit" class="btn btn-ghost btn-xs hidden">Cancel</button>
+              </div>
+            </div>
+            <div id="edit-feedback" class="hidden mb-3"></div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+              <div>
+                <p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Invoice Number</p>
+                <p class="font-semibold mt-0.5" id="detail-number">--</p>
+              </div>
+              <div>
+                <p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Currency</p>
+                <p class="font-semibold mt-0.5" id="detail-currency">--</p>
+              </div>
+              <div>
+                <p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Invoice Date</p>
+                <p class="font-semibold mt-0.5" id="detail-invoice-date">--</p>
+              </div>
+              <div>
+                <p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Due Date</p>
+                <p class="font-semibold mt-0.5" id="detail-due-date">--</p>
+              </div>
+              <div class="min-w-0">
+                <p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Customer ID</p>
+                <p class="font-mono text-sm mt-0.5 truncate" id="detail-customer">--</p>
+              </div>
+              <div>
+                <p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Vendor</p>
+                <p class="font-mono text-sm mt-0.5" id="detail-vendor">--</p>
+              </div>
+              <div class="min-w-0">
+                <p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Source Email From</p>
+                <p class="text-sm mt-0.5 break-all" id="detail-email-from">--</p>
+              </div>
+              <div class="min-w-0">
+                <p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Source Email Subject</p>
+                <p class="text-sm mt-0.5 break-words" id="detail-email-subject">--</p>
+              </div>
+              <div>
+                <p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Created</p>
+                <p class="text-sm mt-0.5" id="detail-created">--</p>
+              </div>
+              <div>
+                <p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Last Updated</p>
+                <p class="text-sm mt-0.5" id="detail-updated">--</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Totals Card -->
+        <div class="card bg-base-100 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title text-lg mb-4">Totals</h2>
+            <div class="grid grid-cols-3 gap-2 sm:gap-4">
+              <div class="text-center p-2 sm:p-4 bg-base-200 rounded-lg">
+                <p class="text-[10px] sm:text-xs text-base-content/50 uppercase tracking-wide font-medium">Subtotal</p>
+                <p class="text-base sm:text-xl font-bold mt-1 truncate" id="detail-subtotal">--</p>
+              </div>
+              <div class="text-center p-2 sm:p-4 bg-base-200 rounded-lg">
+                <p class="text-[10px] sm:text-xs text-base-content/50 uppercase tracking-wide font-medium">Tax</p>
+                <p class="text-base sm:text-xl font-bold mt-1 truncate" id="detail-tax">--</p>
+              </div>
+              <div class="text-center p-2 sm:p-4 bg-primary/10 rounded-lg border-2 border-primary/20">
+                <p class="text-[10px] sm:text-xs text-primary uppercase tracking-wide font-medium">Total</p>
+                <p class="text-base sm:text-xl font-bold mt-1 text-primary truncate" id="detail-total">--</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Line Items Table -->
+        <div class="card bg-base-100 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title text-lg mb-4">Line Items</h2>
+            <div id="line-items-empty" class="hidden text-center py-8 text-base-content/40">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mx-auto mb-2 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <p>No line items available for this invoice.</p>
+            </div>
+            <div id="line-items-table-wrapper" class="hidden overflow-x-auto">
+              <table class="table table-zebra">
+                <thead>
+                  <tr>
+                    <th class="text-xs uppercase">#</th>
+                    <th class="text-xs uppercase">Description</th>
+                    <th class="text-xs uppercase text-right">Qty</th>
+                    <th class="text-xs uppercase text-right">Unit Price</th>
+                    <th class="text-xs uppercase text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody id="line-items-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Comments Section -->
+        <div class="card bg-base-100 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title text-lg mb-4">Comments &amp; Discussion</h2>
+
+            <!-- Comments list (scrollable) -->
+            <div id="comments-list" class="max-h-96 overflow-y-auto space-y-3 mb-4">
+              <div id="comments-empty" class="text-center py-6 text-base-content/40">
+                <p class="text-sm">No comments yet. Start the discussion.</p>
+              </div>
+              <div id="comments-loading" class="hidden flex justify-center py-4">
+                <span class="loading loading-spinner loading-sm"></span>
+              </div>
+            </div>
+
+            <!-- Comment input -->
+            <div class="border-t border-base-200 pt-3">
+              <div class="flex flex-col sm:flex-row gap-2">
+                <textarea id="comment-input" class="textarea textarea-bordered flex-1 text-sm" placeholder="Add a comment..." rows="2"></textarea>
+                <button id="btn-send-comment" class="btn btn-primary btn-sm self-end w-full sm:w-auto" disabled>
+                  Send
+                </button>
+              </div>
+              <p class="text-xs opacity-40 mt-1 hidden sm:block">Press Cmd+Enter to send</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right column: Actions & Validation (1/3 width) -->
+      <div class="flex flex-col gap-6">
+
+        <!-- Actions Card -->
+        <div class="card bg-base-100 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title text-lg mb-4">Actions</h2>
+            <div class="flex flex-col gap-3">
+              <button id="btn-approve" class="btn btn-success w-full no-underline" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                Approve Invoice
+              </button>
+              <button id="btn-reject" class="btn btn-error w-full no-underline" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Reject Invoice
+              </button>
+              <!-- View PDF button (shown only when PDF is attached) -->
+              <div id="pdf-section" class="hidden border-t border-base-200 pt-3 mt-1">
+                <button id="btn-view-pdf" class="btn btn-outline btn-info w-full no-underline">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  View Invoice PDF
+                </button>
+              </div>
+            </div>
+            <!-- Action feedback -->
+            <div id="action-feedback" class="hidden mt-3"></div>
+            <!-- Action loading -->
+            <div id="action-loading" class="hidden flex items-center justify-center gap-2 mt-3 text-sm text-base-content/60">
+              <span class="loading loading-spinner loading-sm"></span>
+              <span>Processing...</span>
+            </div>
+            <!-- Review Details (shown when reviewed_by is present) -->
+            <div id="review-details" class="hidden mt-4 pt-4 border-t border-base-200">
+              <h3 class="text-sm font-semibold text-base-content/70 mb-2">Review Details</h3>
+              <div class="space-y-1 text-sm">
+                <p><span class="text-base-content/50">Reviewed by:</span> <span id="reviewed-by" class="font-medium"></span></p>
+                <p><span class="text-base-content/50">Reviewed at:</span> <span id="reviewed-at" class="font-medium"></span></p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- QuickBooks Sync Status Card -->
+        <div id="sync-status-card" class="card bg-base-100 shadow-sm hidden">
+          <div class="card-body">
+            <h2 class="card-title text-lg mb-4">
+              <img src="/images/logos/quickbooks.svg" alt="QB" class="h-5 w-5" />
+              QuickBooks Sync
+            </h2>
+            <div id="sync-status-content">
+              <div class="flex items-center gap-2">
+                <span id="sync-status-badge" class="badge"></span>
+                <span id="sync-status-text" class="text-sm"></span>
+              </div>
+              <div id="sync-details" class="hidden mt-3 space-y-1 text-sm">
+                <p><span class="text-base-content/50">QB Bill ID:</span> <span id="sync-external-id" class="font-mono text-xs"></span></p>
+                <p><span class="text-base-content/50">Synced at:</span> <span id="sync-time" class="font-medium"></span></p>
+              </div>
+              <div id="sync-retry-section" class="hidden mt-3">
+                <button id="btn-retry-sync" class="btn btn-sm btn-warning w-full">
+                  Retry Sync to QuickBooks
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Confidence Score Card -->
+        <div class="card bg-base-100 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title text-lg mb-4">Confidence Score</h2>
+            <div class="flex items-center gap-3 mb-2">
+              <span id="confidence-value" class="text-3xl font-bold">--</span>
+              <span class="text-base-content/50 text-sm">/ 100</span>
+            </div>
+            <progress id="confidence-bar" class="progress w-full h-3" value="0" max="100"></progress>
+            <p id="confidence-label" class="text-xs text-base-content/50 mt-2">No confidence data</p>
+          </div>
+        </div>
+
+        <!-- Validation Results Card -->
+        <div class="card bg-base-100 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title text-lg mb-4">Validation Results</h2>
+
+            <!-- Errors -->
+            <div id="validation-errors-section" class="hidden mb-4">
+              <div class="flex items-center gap-2 mb-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span class="text-sm font-semibold text-error">Errors</span>
+                <span id="errors-count" class="badge badge-error badge-sm">0</span>
+              </div>
+              <ul id="errors-list" class="space-y-1"></ul>
+            </div>
+
+            <!-- Warnings -->
+            <div id="validation-warnings-section" class="hidden mb-4">
+              <div class="flex items-center gap-2 mb-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+                <span class="text-sm font-semibold text-warning">Warnings</span>
+                <span id="warnings-count" class="badge badge-warning badge-sm">0</span>
+              </div>
+              <ul id="warnings-list" class="space-y-1"></ul>
+            </div>
+
+            <!-- No issues -->
+            <div id="validation-clean" class="hidden text-center py-4">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto text-success mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p class="text-sm text-success font-medium">No validation issues</p>
+            </div>
+
+            <!-- Validation unavailable -->
+            <div id="validation-unavailable" class="hidden text-center py-4 text-base-content/40">
+              <p class="text-sm">Validation data not available for this invoice.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Confirm Modal -->
+  <dialog id="confirm-modal" class="modal">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg" id="confirm-title">Confirm Action</h3>
+      <p class="py-4" id="confirm-message">Are you sure?</p>
+      <div class="modal-action">
+        <button id="confirm-cancel" class="btn btn-ghost">Cancel</button>
+        <button id="confirm-proceed" class="btn">Proceed</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+      <button>close</button>
+    </form>
+  </dialog>
+
+  <!-- PDF Viewer Modal -->
+  <dialog id="pdf-modal" class="modal">
+    <div class="modal-box w-[calc(100%-1rem)] sm:w-11/12 max-w-5xl h-[95vh] sm:h-[85vh] flex flex-col p-0">
+      <div class="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 border-b border-base-200">
+        <h3 class="font-bold text-base sm:text-lg">Invoice PDF</h3>
+        <div class="flex items-center gap-1 sm:gap-2">
+          <a id="pdf-download-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-ghost no-underline">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            <span class="hidden sm:inline">Download</span>
+          </a>
+          <form method="dialog">
+            <button class="btn btn-sm btn-ghost">Close</button>
+          </form>
+        </div>
+      </div>
+      <div id="pdf-loading" class="flex-1 flex items-center justify-center">
+        <span class="loading loading-spinner loading-lg text-primary"></span>
+      </div>
+      <iframe id="pdf-iframe" class="flex-1 w-full hidden" title="Invoice PDF"></iframe>
+      <div id="pdf-error" class="flex-1 flex items-center justify-center hidden">
+        <div class="text-center px-4">
+          <p class="text-error font-medium">Failed to load PDF</p>
+          <p id="pdf-error-msg" class="text-sm text-base-content/50 mt-1"></p>
+        </div>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+      <button>close</button>
+    </form>
+  </dialog>
+
+  <!-- Client-side logic -->
+  <script>
+    import { supabase, FUNCTIONS_URL, getAccessToken } from '../../lib/supabase';
+
+    // --- Types ---
+    interface LineItem {
+      description: string;
+      quantity: number;
+      unit_price: number;
+      total: number;
+    }
+
+    interface Invoice {
+      id: string;
+      customer_id: string | null;
+      vendor_id: string | null;
+      vendors: { name: string } | null;
+      invoice_number: string | null;
+      invoice_date: string | null;
+      due_date: string | null;
+      currency: string | null;
+      subtotal: number | null;
+      tax: number | null;
+      total: number | null;
+      line_items: LineItem[] | null;
+      confidence: number | null;
+      status: string;
+      is_valid: boolean | null;
+      validation_errors: string[] | null;
+      validation_warnings: string[] | null;
+      source_email_subject: string | null;
+      source_email_from: string | null;
+      raw_text: string | null;
+      pdf_storage_path: string | null;
+      reviewed_by: string | null;
+      reviewed_at: string | null;
+      sync_status: string | null;
+      synced_at: string | null;
+      external_accounting_id: string | null;
+      accounting_error: string | null;
+      created_at: string;
+      updated_at: string | null;
+    }
+
+    interface Comment {
+      id: string;
+      invoice_id: string;
+      user_id: string | null;
+      user_name: string | null;
+      user_email: string | null;
+      content: string;
+      is_system: boolean;
+      created_at: string;
+    }
+
+    // --- DOM references ---
+    const loadingState = document.getElementById('loading-state')!;
+    const errorState = document.getElementById('error-state')!;
+    const errorMessage = document.getElementById('error-message')!;
+    const invoiceContent = document.getElementById('invoice-content')!;
+    const breadcrumbInvoice = document.getElementById('breadcrumb-invoice')!;
+
+    // --- Helpers ---
+    function getInvoiceIdFromUrl(): string | null {
+      const segments = window.location.pathname.split('/').filter(Boolean);
+      // Expect: ["invoice", "<id>"]
+      if (segments.length >= 2 && segments[0] === 'invoice') {
+        return segments[1];
+      }
+      return null;
+    }
+
+    function formatDate(dateStr: string | null): string {
+      if (!dateStr) return '--';
+      try {
+        return new Date(dateStr).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+        });
+      } catch {
+        return dateStr;
+      }
+    }
+
+    function formatDateTime(dateStr: string | null): string {
+      if (!dateStr) return '--';
+      try {
+        return new Date(dateStr).toLocaleString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+      } catch {
+        return dateStr;
+      }
+    }
+
+    function formatCurrency(amount: number | null, currency: string | null): string {
+      if (amount === null || amount === undefined) return '--';
+      const cur = currency || 'USD';
+      try {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: cur,
+        }).format(amount);
+      } catch {
+        return `${cur} ${amount.toFixed(2)}`;
+      }
+    }
+
+    function getStatusBadgeClass(status: string): string {
+      const map: Record<string, string> = {
+        pending: 'badge-warning',
+        approved: 'badge-success',
+        flagged: 'badge-error',
+        rejected: 'badge-error badge-outline',
+        synced: 'badge-info',
+        error: 'badge-error',
+      };
+      return map[status] || 'badge-ghost';
+    }
+
+    function getConfidenceColor(score: number): string {
+      if (score >= 80) return 'progress-success';
+      if (score >= 60) return 'progress-warning';
+      return 'progress-error';
+    }
+
+    function getConfidenceLabel(score: number): string {
+      if (score >= 90) return 'High confidence';
+      if (score >= 70) return 'Good confidence';
+      if (score >= 50) return 'Moderate confidence';
+      return 'Low confidence - review carefully';
+    }
+
+    function showError(msg: string) {
+      loadingState.classList.add('hidden');
+      invoiceContent.classList.add('hidden');
+      errorState.classList.remove('hidden');
+      errorMessage.textContent = msg;
+    }
+
+    function showContent() {
+      loadingState.classList.add('hidden');
+      errorState.classList.add('hidden');
+      invoiceContent.classList.remove('hidden');
+    }
+
+    function formatRelativeTime(dateStr: string): string {
+      const now = new Date();
+      const date = new Date(dateStr);
+      const diffMs = now.getTime() - date.getTime();
+      const diffSeconds = Math.floor(diffMs / 1000);
+      const diffMinutes = Math.floor(diffSeconds / 60);
+      const diffHours = Math.floor(diffMinutes / 60);
+      const diffDays = Math.floor(diffHours / 24);
+
+      if (diffSeconds < 60) return 'just now';
+      if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
+      if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+      if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+      return formatDate(dateStr);
+    }
+
+    // --- Get auth token helper ---
+    async function getAuthToken(): Promise<string | null> {
+      const token = await getAccessToken();
+      if (!token) {
+        window.location.href = '/login';
+        return null;
+      }
+      return token;
+    }
+
+    // --- Fetch invoice data ---
+    async function fetchInvoice(invoiceId: string): Promise<Invoice | null> {
+      const token = await getAuthToken();
+      if (!token) return null;
+
+      // Fetch full invoice record from approve-invoice GET endpoint
+      const res = await fetch(`${FUNCTIONS_URL}/approve-invoice?invoice_id=${encodeURIComponent(invoiceId)}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `API returned ${res.status}: ${res.statusText}`);
+      }
+
+      const data = await res.json();
+      return data.invoice;
+    }
+
+    // --- Render functions ---
+    function renderInvoice(invoice: Invoice) {
+      // Title & breadcrumb
+      const titleEl = document.getElementById('invoice-title')!;
+      const subtitleEl = document.getElementById('invoice-subtitle')!;
+      titleEl.textContent = invoice.invoice_number
+        ? `Invoice #${invoice.invoice_number}`
+        : 'Invoice';
+      subtitleEl.textContent = `Created ${formatDateTime(invoice.created_at)}`;
+      breadcrumbInvoice.textContent = invoice.invoice_number
+        ? `#${invoice.invoice_number}`
+        : invoice.id.substring(0, 8);
+
+      // Update page title
+      document.title = `${invoice.invoice_number || 'Invoice'} | Invoice Dashboard`;
+
+      // Status badge
+      const statusBadge = document.getElementById('status-badge')!;
+      statusBadge.textContent = invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1);
+      statusBadge.className = `badge badge-lg font-semibold ${getStatusBadgeClass(invoice.status)}`;
+
+      // Valid badge
+      const validBadge = document.getElementById('valid-badge')!;
+      if (invoice.is_valid === true) {
+        validBadge.textContent = 'Valid';
+        validBadge.className = 'badge badge-lg badge-success badge-outline';
+      } else if (invoice.is_valid === false) {
+        validBadge.textContent = 'Invalid';
+        validBadge.className = 'badge badge-lg badge-error badge-outline';
+      } else {
+        validBadge.textContent = 'Unvalidated';
+        validBadge.className = 'badge badge-lg badge-ghost';
+      }
+
+      // Detail fields
+      document.getElementById('detail-number')!.textContent = invoice.invoice_number || '--';
+      document.getElementById('detail-currency')!.textContent = invoice.currency || '--';
+      document.getElementById('detail-invoice-date')!.textContent = formatDate(invoice.invoice_date);
+      document.getElementById('detail-due-date')!.textContent = formatDate(invoice.due_date);
+      document.getElementById('detail-customer')!.textContent = invoice.customer_id || '--';
+      document.getElementById('detail-vendor')!.textContent = invoice.vendors?.name || '--';
+      document.getElementById('detail-email-from')!.textContent = invoice.source_email_from || '--';
+      document.getElementById('detail-email-subject')!.textContent = invoice.source_email_subject || '--';
+      document.getElementById('detail-created')!.textContent = formatDateTime(invoice.created_at);
+      document.getElementById('detail-updated')!.textContent = formatDateTime(invoice.updated_at);
+      // Totals
+      const currency = invoice.currency;
+      document.getElementById('detail-subtotal')!.textContent = formatCurrency(invoice.subtotal, currency);
+      document.getElementById('detail-tax')!.textContent = formatCurrency(invoice.tax, currency);
+      document.getElementById('detail-total')!.textContent = formatCurrency(invoice.total, currency);
+
+      // Line items
+      renderLineItems(invoice.line_items, currency);
+
+      // Confidence
+      renderConfidence(invoice.confidence);
+
+      // Validation
+      renderValidation(invoice.validation_errors, invoice.validation_warnings);
+
+      // Review details
+      renderReviewDetails(invoice);
+
+      // Sync status
+      renderSyncStatus(invoice);
+
+      // PDF section
+      renderPdfSection(invoice);
+
+      // Enable/disable action buttons based on status
+      const canAct = ['pending', 'flagged'].includes(invoice.status);
+      (document.getElementById('btn-approve') as HTMLButtonElement).disabled = !canAct;
+      (document.getElementById('btn-reject') as HTMLButtonElement).disabled = !canAct;
+    }
+
+    function renderLineItems(lineItems: LineItem[] | null, currency: string | null) {
+      const emptyEl = document.getElementById('line-items-empty')!;
+      const tableWrapper = document.getElementById('line-items-table-wrapper')!;
+      const tbody = document.getElementById('line-items-body')!;
+
+      if (!lineItems || lineItems.length === 0) {
+        emptyEl.classList.remove('hidden');
+        tableWrapper.classList.add('hidden');
+        return;
+      }
+
+      emptyEl.classList.add('hidden');
+      tableWrapper.classList.remove('hidden');
+      tbody.innerHTML = '';
+
+      lineItems.forEach((item, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="text-base-content/50">${idx + 1}</td>
+          <td>${escapeHtml(item.description || '--')}</td>
+          <td class="text-right font-mono">${item.quantity ?? '--'}</td>
+          <td class="text-right font-mono">${formatCurrency(item.unit_price, currency)}</td>
+          <td class="text-right font-mono font-semibold">${formatCurrency(item.total, currency)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderConfidence(confidence: number | null) {
+      const valueEl = document.getElementById('confidence-value')!;
+      const barEl = document.getElementById('confidence-bar') as HTMLProgressElement;
+      const labelEl = document.getElementById('confidence-label')!;
+
+      if (confidence === null || confidence === undefined) {
+        valueEl.textContent = '--';
+        barEl.value = 0;
+        labelEl.textContent = 'No confidence data';
+        return;
+      }
+
+      const score = Math.round(confidence * 100);
+      valueEl.textContent = String(score);
+      barEl.value = score;
+      barEl.className = `progress w-full h-3 ${getConfidenceColor(score)}`;
+      labelEl.textContent = getConfidenceLabel(score);
+    }
+
+    function renderValidation(errors: string[] | null, warnings: string[] | null) {
+      const errorsSection = document.getElementById('validation-errors-section')!;
+      const warningsSection = document.getElementById('validation-warnings-section')!;
+      const cleanSection = document.getElementById('validation-clean')!;
+      const unavailableSection = document.getElementById('validation-unavailable')!;
+
+      const hasErrors = errors && errors.length > 0;
+      const hasWarnings = warnings && warnings.length > 0;
+      const hasAnyData = errors !== null || warnings !== null;
+
+      if (!hasAnyData) {
+        unavailableSection.classList.remove('hidden');
+        return;
+      }
+
+      if (!hasErrors && !hasWarnings) {
+        cleanSection.classList.remove('hidden');
+        return;
+      }
+
+      if (hasErrors) {
+        errorsSection.classList.remove('hidden');
+        document.getElementById('errors-count')!.textContent = String(errors!.length);
+        const list = document.getElementById('errors-list')!;
+        list.innerHTML = '';
+        errors!.forEach(err => {
+          const li = document.createElement('li');
+          li.className = 'text-sm text-error bg-error/10 px-3 py-2 rounded-lg';
+          li.textContent = err;
+          list.appendChild(li);
+        });
+      }
+
+      if (hasWarnings) {
+        warningsSection.classList.remove('hidden');
+        document.getElementById('warnings-count')!.textContent = String(warnings!.length);
+        const list = document.getElementById('warnings-list')!;
+        list.innerHTML = '';
+        warnings!.forEach(warn => {
+          const li = document.createElement('li');
+          li.className = 'text-sm text-warning bg-warning/10 px-3 py-2 rounded-lg';
+          li.textContent = warn;
+          list.appendChild(li);
+        });
+      }
+    }
+
+    function renderReviewDetails(invoice: Invoice) {
+      const reviewSection = document.getElementById('review-details')!;
+      if (invoice.reviewed_by) {
+        reviewSection.classList.remove('hidden');
+        document.getElementById('reviewed-by')!.textContent = invoice.reviewed_by;
+        document.getElementById('reviewed-at')!.textContent = formatDateTime(invoice.reviewed_at);
+      } else {
+        reviewSection.classList.add('hidden');
+      }
+    }
+
+    function renderSyncStatus(invoice: Invoice) {
+      const card = document.getElementById('sync-status-card')!;
+      const badge = document.getElementById('sync-status-badge')!;
+      const text = document.getElementById('sync-status-text')!;
+      const details = document.getElementById('sync-details')!;
+      const retrySection = document.getElementById('sync-retry-section')!;
+
+      // Show for approved, synced, or error statuses
+      if (!['approved', 'synced', 'error'].includes(invoice.status)) {
+        card.classList.add('hidden');
+        return;
+      }
+
+      card.classList.remove('hidden');
+
+      const syncStatus = invoice.sync_status || invoice.status;
+
+      if (syncStatus === 'synced') {
+        badge.className = 'badge badge-sm badge-success';
+        badge.textContent = 'Synced';
+        text.textContent = 'Bill created in QuickBooks';
+        details.classList.remove('hidden');
+        retrySection.classList.remove('hidden');
+        document.getElementById('btn-retry-sync')!.textContent = 'Re-sync to QuickBooks';
+        document.getElementById('sync-external-id')!.textContent = invoice.external_accounting_id || '--';
+        document.getElementById('sync-time')!.textContent = formatDateTime(invoice.synced_at);
+      } else if (syncStatus === 'error') {
+        badge.className = 'badge badge-sm badge-error';
+        badge.textContent = 'Failed';
+        text.textContent = invoice.accounting_error || 'Sync to QuickBooks failed';
+        details.classList.add('hidden');
+        retrySection.classList.remove('hidden');
+      } else if (syncStatus === 'approved') {
+        badge.className = 'badge badge-sm badge-ghost';
+        badge.textContent = 'Not synced';
+        text.textContent = 'Ready to sync to QuickBooks';
+        details.classList.add('hidden');
+        retrySection.classList.remove('hidden');
+        // Change button text for initial sync
+        document.getElementById('btn-retry-sync')!.textContent = 'Sync to QuickBooks';
+      } else {
+        badge.className = 'badge badge-sm badge-ghost';
+        badge.textContent = syncStatus || 'Unknown';
+        text.textContent = '';
+        details.classList.add('hidden');
+        retrySection.classList.add('hidden');
+      }
+    }
+
+    function renderPdfSection(invoice: Invoice) {
+      const section = document.getElementById('pdf-section')!;
+      if (invoice.pdf_storage_path) {
+        section.classList.remove('hidden');
+      } else {
+        section.classList.add('hidden');
+      }
+    }
+
+    async function viewPdf() {
+      if (!currentInvoice) return;
+
+      const modal = document.getElementById('pdf-modal') as HTMLDialogElement;
+      const loading = document.getElementById('pdf-loading')!;
+      const iframe = document.getElementById('pdf-iframe') as HTMLIFrameElement;
+      const errorEl = document.getElementById('pdf-error')!;
+      const errorMsg = document.getElementById('pdf-error-msg')!;
+      const downloadLink = document.getElementById('pdf-download-link') as HTMLAnchorElement;
+
+      // Reset state
+      loading.classList.remove('hidden');
+      iframe.classList.add('hidden');
+      errorEl.classList.add('hidden');
+      iframe.src = '';
+      downloadLink.href = '#';
+
+      modal.showModal();
+
+      try {
+        const token = await getAuthToken();
+        if (!token) return;
+
+        const res = await fetch(
+          `${FUNCTIONS_URL}/get-invoice-pdf?invoice_id=${encodeURIComponent(currentInvoice.id)}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `Failed to load PDF (${res.status})`);
+        }
+
+        const data = await res.json();
+        const signedUrl = data.signed_url;
+
+        iframe.src = signedUrl;
+        downloadLink.href = signedUrl;
+
+        iframe.onload = () => {
+          loading.classList.add('hidden');
+          iframe.classList.remove('hidden');
+        };
+
+        // Fallback timeout in case iframe onload doesn't fire
+        setTimeout(() => {
+          if (!iframe.classList.contains('hidden')) return;
+          loading.classList.add('hidden');
+          iframe.classList.remove('hidden');
+        }, 3000);
+
+      } catch (err: any) {
+        loading.classList.add('hidden');
+        errorEl.classList.remove('hidden');
+        errorMsg.textContent = err.message || 'An unexpected error occurred.';
+      }
+    }
+
+    function escapeHtml(str: string): string {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // --- Comments ---
+    async function loadComments(invoiceId: string) {
+      const commentsList = document.getElementById('comments-list')!;
+      const commentsEmpty = document.getElementById('comments-empty')!;
+      const commentsLoading = document.getElementById('comments-loading')!;
+
+      commentsLoading.classList.remove('hidden');
+      commentsEmpty.classList.add('hidden');
+
+      try {
+        const token = await getAuthToken();
+        if (!token) return;
+
+        const res = await fetch(`${FUNCTIONS_URL}/invoice-comments?invoice_id=${encodeURIComponent(invoiceId)}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!res.ok) {
+          throw new Error('Failed to load comments');
+        }
+
+        const data = await res.json();
+        const comments: Comment[] = data.comments || [];
+
+        renderComments(comments);
+      } catch (err) {
+        console.error('Error loading comments:', err);
+        commentsEmpty.classList.remove('hidden');
+        commentsEmpty.innerHTML = '<p class="text-sm text-error">Failed to load comments.</p>';
+      } finally {
+        commentsLoading.classList.add('hidden');
+      }
+    }
+
+    function renderComments(comments: Comment[]) {
+      const commentsList = document.getElementById('comments-list')!;
+      const commentsEmpty = document.getElementById('comments-empty')!;
+
+      // Remove all existing comment items
+      const existingComments = commentsList.querySelectorAll('.comment-item');
+      existingComments.forEach(el => el.remove());
+
+      if (comments.length === 0) {
+        commentsEmpty.classList.remove('hidden');
+        commentsEmpty.innerHTML = '<p class="text-sm">No comments yet. Start the discussion.</p>';
+        return;
+      }
+
+      commentsEmpty.classList.add('hidden');
+
+      comments.forEach(comment => {
+        const el = document.createElement('div');
+        el.className = 'comment-item';
+
+        if (comment.is_system) {
+          el.innerHTML = `
+            <div class="flex items-center justify-center gap-2 py-2 text-xs opacity-50">
+              <span class="w-4 h-4">\u2713</span>
+              <span>${escapeHtml(comment.content)}</span>
+              <span>\u2022 ${formatDate(comment.created_at)}</span>
+            </div>
+          `;
+        } else {
+          const displayName = comment.user_name || comment.user_email || 'Unknown';
+          const initial = displayName.charAt(0).toUpperCase();
+
+          el.innerHTML = `
+            <div class="flex gap-3 p-3 rounded-lg bg-base-200/50">
+              <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                ${escapeHtml(initial)}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-baseline gap-2">
+                  <span class="font-semibold text-sm">${escapeHtml(displayName)}</span>
+                  <span class="text-xs opacity-40">${formatRelativeTime(comment.created_at)}</span>
+                </div>
+                <p class="text-sm mt-1">${escapeHtml(comment.content)}</p>
+              </div>
+            </div>
+          `;
+        }
+
+        commentsList.appendChild(el);
+      });
+
+      // Scroll to bottom
+      commentsList.scrollTop = commentsList.scrollHeight;
+    }
+
+    async function sendComment() {
+      if (!currentInvoice) return;
+
+      const input = document.getElementById('comment-input') as HTMLTextAreaElement;
+      const sendBtn = document.getElementById('btn-send-comment') as HTMLButtonElement;
+      const content = input.value.trim();
+
+      if (!content) return;
+
+      const token = await getAuthToken();
+      if (!token) return;
+
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Sending...';
+
+      try {
+        const res = await fetch(`${FUNCTIONS_URL}/invoice-comments`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            invoice_id: currentInvoice.id,
+            content: content,
+          }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Failed to send comment');
+        }
+
+        // Clear input
+        input.value = '';
+        sendBtn.disabled = true;
+
+        // Re-fetch comments
+        await loadComments(currentInvoice.id);
+
+      } catch (err: any) {
+        console.error('Error sending comment:', err);
+        alert(err.message || 'Failed to send comment.');
+      } finally {
+        sendBtn.textContent = 'Send';
+        // Re-check if send should be enabled
+        sendBtn.disabled = !input.value.trim();
+      }
+    }
+
+    // --- Edit Mode ---
+    let isEditMode = false;
+
+    function enterEditMode() {
+      if (!currentInvoice) return;
+      isEditMode = true;
+
+      // Show save/cancel, hide edit
+      document.getElementById('btn-edit-invoice')!.classList.add('hidden');
+      document.getElementById('btn-save-invoice')!.classList.remove('hidden');
+      document.getElementById('btn-cancel-edit')!.classList.remove('hidden');
+
+      // Hide any previous feedback
+      document.getElementById('edit-feedback')!.classList.add('hidden');
+
+      // Replace Invoice Info display fields with inputs
+      replaceWithInput('detail-number', 'text', currentInvoice.invoice_number || '', 'Invoice number');
+      replaceWithInput('detail-currency', 'text', currentInvoice.currency || '', 'e.g. USD');
+      replaceWithInput('detail-invoice-date', 'date', currentInvoice.invoice_date || '');
+      replaceWithInput('detail-due-date', 'date', currentInvoice.due_date || '');
+
+      // Replace Totals display fields with inputs
+      replaceTotalWithInput('detail-subtotal', currentInvoice.subtotal);
+      replaceTotalWithInput('detail-tax', currentInvoice.tax);
+      replaceTotalWithInput('detail-total', currentInvoice.total);
+    }
+
+    function replaceWithInput(elementId: string, type: string, value: string, placeholder?: string) {
+      const el = document.getElementById(elementId)!;
+      const input = document.createElement('input');
+      input.type = type;
+      input.value = value;
+      input.className = 'input input-bordered input-sm w-full';
+      input.dataset.editField = elementId;
+      if (placeholder) input.placeholder = placeholder;
+      el.textContent = '';
+      el.appendChild(input);
+    }
+
+    function replaceTotalWithInput(elementId: string, value: number | null) {
+      const el = document.getElementById(elementId)!;
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.step = '0.01';
+      input.value = value !== null && value !== undefined ? String(value) : '';
+      input.className = 'input input-bordered input-sm w-full text-center';
+      input.dataset.editField = elementId;
+      el.textContent = '';
+      el.appendChild(input);
+    }
+
+    function exitEditMode() {
+      isEditMode = false;
+
+      // Show edit, hide save/cancel
+      document.getElementById('btn-edit-invoice')!.classList.remove('hidden');
+      document.getElementById('btn-save-invoice')!.classList.add('hidden');
+      document.getElementById('btn-cancel-edit')!.classList.add('hidden');
+
+      // Re-render invoice to restore display values
+      if (currentInvoice) {
+        renderInvoice(currentInvoice);
+      }
+    }
+
+    async function saveEdits() {
+      if (!currentInvoice) return;
+
+      const token = await getAuthToken();
+      if (!token) return;
+
+      // Collect values from inputs
+      const updates: Record<string, any> = {};
+
+      const numberInput = document.querySelector('[data-edit-field="detail-number"]') as HTMLInputElement;
+      const currencyInput = document.querySelector('[data-edit-field="detail-currency"]') as HTMLInputElement;
+      const invoiceDateInput = document.querySelector('[data-edit-field="detail-invoice-date"]') as HTMLInputElement;
+      const dueDateInput = document.querySelector('[data-edit-field="detail-due-date"]') as HTMLInputElement;
+      const subtotalInput = document.querySelector('[data-edit-field="detail-subtotal"]') as HTMLInputElement;
+      const taxInput = document.querySelector('[data-edit-field="detail-tax"]') as HTMLInputElement;
+      const totalInput = document.querySelector('[data-edit-field="detail-total"]') as HTMLInputElement;
+
+      if (numberInput) updates.invoice_number = numberInput.value || null;
+      if (currencyInput) updates.currency = currencyInput.value || null;
+      if (invoiceDateInput) updates.invoice_date = invoiceDateInput.value || null;
+      if (dueDateInput) updates.due_date = dueDateInput.value || null;
+      if (subtotalInput) updates.subtotal = subtotalInput.value ? parseFloat(subtotalInput.value) : null;
+      if (taxInput) updates.tax = taxInput.value ? parseFloat(taxInput.value) : null;
+      if (totalInput) updates.total = totalInput.value ? parseFloat(totalInput.value) : null;
+
+      // Show loading state on save button
+      const saveBtn = document.getElementById('btn-save-invoice') as HTMLButtonElement;
+      const cancelBtn = document.getElementById('btn-cancel-edit') as HTMLButtonElement;
+      saveBtn.disabled = true;
+      cancelBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+
+      try {
+        const res = await fetch(`${FUNCTIONS_URL}/approve-invoice`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            invoice_id: currentInvoice.id,
+            updates,
+          }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `Failed to save: ${res.status}`);
+        }
+
+        const result = await res.json();
+
+        // Update local invoice data with the edits
+        if (result.invoice) {
+          currentInvoice = result.invoice;
+        } else {
+          // Fallback: apply updates locally
+          Object.assign(currentInvoice, updates);
+        }
+
+        // Exit edit mode and re-render
+        isEditMode = false;
+        document.getElementById('btn-edit-invoice')!.classList.remove('hidden');
+        document.getElementById('btn-save-invoice')!.classList.add('hidden');
+        document.getElementById('btn-cancel-edit')!.classList.add('hidden');
+        renderInvoice(currentInvoice);
+
+        // Show success feedback
+        showEditFeedback('Changes saved successfully.', 'success');
+
+      } catch (err: any) {
+        showEditFeedback(err.message || 'Failed to save changes.', 'error');
+        saveBtn.disabled = false;
+        cancelBtn.disabled = false;
+        saveBtn.textContent = 'Save';
+      }
+    }
+
+    function showEditFeedback(message: string, type: 'success' | 'error') {
+      const feedbackEl = document.getElementById('edit-feedback')!;
+      feedbackEl.className = `alert ${type === 'success' ? 'alert-success' : 'alert-error'} mb-3 py-2 text-sm`;
+      feedbackEl.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-4 w-4" fill="none" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${type === 'success'
+            ? 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'
+            : 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z'}" />
+        </svg>
+        <span>${escapeHtml(message)}</span>
+      `;
+      feedbackEl.classList.remove('hidden');
+      if (type === 'success') {
+        setTimeout(() => { feedbackEl.classList.add('hidden'); }, 3000);
+      }
+    }
+
+    // --- Actions ---
+    let currentInvoice: Invoice | null = null;
+
+    async function performAction(action: 'approve' | 'reject') {
+      if (!currentInvoice) return;
+
+      const token = await getAuthToken();
+      if (!token) return;
+
+      const btnApprove = document.getElementById('btn-approve') as HTMLButtonElement;
+      const btnReject = document.getElementById('btn-reject') as HTMLButtonElement;
+      const actionLoading = document.getElementById('action-loading')!;
+      const actionFeedback = document.getElementById('action-feedback')!;
+
+      // Disable buttons and show loading
+      btnApprove.disabled = true;
+      btnReject.disabled = true;
+      actionLoading.classList.remove('hidden');
+      actionFeedback.classList.add('hidden');
+
+      try {
+        const res = await fetch(`${FUNCTIONS_URL}/approve-invoice`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            invoice_id: currentInvoice.id,
+            action: action,
+          }),
+        });
+
+        const result = await res.json();
+
+        if (!res.ok) {
+          throw new Error(result.error || `Request failed with status ${res.status}`);
+        }
+
+        // Show success feedback
+        let newStatus = action === 'approve' ? 'approved' : 'rejected';
+        // Build success message with sync info
+        let successMsg = `Invoice ${newStatus} successfully.`;
+        if (action === 'approve' && result.sync?.synced) {
+          successMsg += ' Synced to QuickBooks.';
+          newStatus = 'synced';
+        } else if (action === 'approve' && result.sync?.synced === false) {
+          successMsg += ` QuickBooks sync failed: ${result.sync.error || 'unknown error'}`;
+        }
+
+        actionFeedback.className = `alert ${action === 'approve' ? 'alert-success' : 'alert-warning'} mt-3`;
+        actionFeedback.innerHTML = `
+          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${action === 'approve'
+              ? 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'
+              : 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'}" />
+          </svg>
+          <span>${successMsg}</span>
+        `;
+        actionFeedback.classList.remove('hidden');
+
+        // Update status badge
+        const statusBadge = document.getElementById('status-badge')!;
+        statusBadge.textContent = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
+        statusBadge.className = `badge badge-lg font-semibold ${getStatusBadgeClass(newStatus)}`;
+
+        // Keep buttons disabled since the invoice is now actioned
+        currentInvoice.status = newStatus;
+
+        // Show reviewer info immediately
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        const userEmail = currentSession?.user?.email || 'Unknown';
+        const reviewedAt = new Date().toISOString();
+        currentInvoice.reviewed_by = userEmail;
+        currentInvoice.reviewed_at = reviewedAt;
+        renderReviewDetails(currentInvoice);
+
+        // Re-render sync status if approved
+        if (action === 'approve') {
+          // Fetch fresh invoice data to get sync status
+          const updatedInvoice = await fetchInvoice(currentInvoice.id);
+          if (updatedInvoice) {
+            currentInvoice = updatedInvoice;
+            renderSyncStatus(updatedInvoice);
+          }
+        }
+
+      } catch (err: any) {
+        actionFeedback.className = 'alert alert-error mt-3';
+        actionFeedback.innerHTML = `
+          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>${escapeHtml(err.message || 'Failed to process action.')}</span>
+        `;
+        actionFeedback.classList.remove('hidden');
+
+        // Re-enable buttons on failure
+        const canAct = ['pending', 'flagged'].includes(currentInvoice.status);
+        btnApprove.disabled = !canAct;
+        btnReject.disabled = !canAct;
+      } finally {
+        actionLoading.classList.add('hidden');
+      }
+    }
+
+    // --- Confirmation modal ---
+    function showConfirmModal(action: 'approve' | 'reject'): Promise<boolean> {
+      return new Promise((resolve) => {
+        const modal = document.getElementById('confirm-modal') as HTMLDialogElement;
+        const title = document.getElementById('confirm-title')!;
+        const message = document.getElementById('confirm-message')!;
+        const proceedBtn = document.getElementById('confirm-proceed')!;
+        const cancelBtn = document.getElementById('confirm-cancel')!;
+
+        if (action === 'approve') {
+          title.textContent = 'Approve Invoice';
+          message.textContent = 'Are you sure you want to approve this invoice? This will mark it for syncing with the accounting system.';
+          proceedBtn.className = 'btn btn-success';
+          proceedBtn.textContent = 'Approve';
+        } else {
+          title.textContent = 'Reject Invoice';
+          message.textContent = 'Are you sure you want to reject this invoice? This action can be reviewed later.';
+          proceedBtn.className = 'btn btn-error';
+          proceedBtn.textContent = 'Reject';
+        }
+
+        function cleanup() {
+          proceedBtn.removeEventListener('click', onProceed);
+          cancelBtn.removeEventListener('click', onCancel);
+          modal.close();
+        }
+
+        function onProceed() {
+          cleanup();
+          resolve(true);
+        }
+
+        function onCancel() {
+          cleanup();
+          resolve(false);
+        }
+
+        proceedBtn.addEventListener('click', onProceed);
+        cancelBtn.addEventListener('click', onCancel);
+        modal.showModal();
+      });
+    }
+
+    // --- Wire up action buttons ---
+    document.getElementById('btn-approve')?.addEventListener('click', async () => {
+      const confirmed = await showConfirmModal('approve');
+      if (confirmed) await performAction('approve');
+    });
+
+    document.getElementById('btn-reject')?.addEventListener('click', async () => {
+      const confirmed = await showConfirmModal('reject');
+      if (confirmed) await performAction('reject');
+    });
+
+    // --- Comment event handlers ---
+    document.getElementById('comment-input')?.addEventListener('input', (e) => {
+      const textarea = e.target as HTMLTextAreaElement;
+      const sendBtn = document.getElementById('btn-send-comment') as HTMLButtonElement;
+      sendBtn.disabled = !textarea.value.trim();
+    });
+
+    document.getElementById('comment-input')?.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        sendComment();
+      }
+    });
+
+    document.getElementById('btn-send-comment')?.addEventListener('click', () => {
+      sendComment();
+    });
+
+    // --- Edit mode event handlers ---
+    document.getElementById('btn-edit-invoice')?.addEventListener('click', () => {
+      enterEditMode();
+    });
+
+    document.getElementById('btn-save-invoice')?.addEventListener('click', () => {
+      saveEdits();
+    });
+
+    document.getElementById('btn-cancel-edit')?.addEventListener('click', () => {
+      exitEditMode();
+    });
+
+    // --- Sync / Retry QB Sync ---
+    document.getElementById('btn-retry-sync')?.addEventListener('click', async () => {
+      if (!currentInvoice) return;
+      const btn = document.getElementById('btn-retry-sync') as HTMLButtonElement;
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Syncing...';
+
+      try {
+        const token = await getAuthToken();
+        if (!token) return;
+
+        const response = await fetch(`${FUNCTIONS_URL}/admin-accounting-sync`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'sync',
+            invoice_ids: [currentInvoice.id],
+          }),
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.synced > 0) {
+          // Refresh the invoice data to show updated sync status
+          const updatedInvoice = await fetchInvoice(currentInvoice.id);
+          if (updatedInvoice) {
+            currentInvoice = updatedInvoice;
+            renderInvoice(updatedInvoice);
+          }
+        } else if (response.ok && result.errors?.length > 0) {
+          alert(`Sync error: ${result.errors[0].error}`);
+        } else if (!response.ok) {
+          alert(`Sync error: ${result.error || 'Unknown error'}`);
+        }
+      } catch (err: any) {
+        console.error('Sync error:', err);
+        alert(`Sync failed: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText || 'Retry Sync to QuickBooks';
+      }
+    });
+
+    // --- PDF viewer event handler ---
+    document.getElementById('btn-view-pdf')?.addEventListener('click', () => {
+      viewPdf();
+    });
+
+    // --- Initialize page ---
+    async function init() {
+      const invoiceId = getInvoiceIdFromUrl();
+
+      if (!invoiceId) {
+        showError('No invoice ID provided in the URL.');
+        return;
+      }
+
+      try {
+        const invoice = await fetchInvoice(invoiceId);
+        if (!invoice) return; // Redirect handled in fetchInvoice
+
+        currentInvoice = invoice;
+        renderInvoice(invoice);
+        showContent();
+
+        // Load comments in background
+        loadComments(invoiceId);
+      } catch (err: any) {
+        showError(err.message || 'Failed to load invoice data.');
+      }
+    }
+
+    init();
+  </script>
+
+</DashboardLayout>

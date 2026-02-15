@@ -1,0 +1,1 @@
+-- Stub: applied remotely. Adds onboarding columns, customer_preferences, email_connections tables.

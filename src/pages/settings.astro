@@ -1,0 +1,749 @@
+---
+export const prerender = false;
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+---
+
+<DashboardLayout title="Settings">
+  <!-- Back + Breadcrumb -->
+  <div class="flex items-center gap-3 mb-4">
+    <a href="/dashboard"
+       class="btn btn-sm btn-ghost gap-1 no-underline">
+      <svg xmlns="http://www.w3.org/2000/svg"
+           class="h-4 w-4" fill="none"
+           viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round"
+              stroke-linejoin="round" stroke-width="2"
+              d="M15 19l-7-7 7-7" />
+      </svg>
+      Back
+    </a>
+    <div class="text-sm breadcrumbs">
+      <ul>
+        <li>
+          <a href="/dashboard"
+             class="no-underline text-base-content/60
+                    hover:text-base-content">
+            Dashboard
+          </a>
+        </li>
+        <li class="text-base-content font-medium">
+          Settings
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Page header -->
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold">Settings</h1>
+      <p class="text-sm opacity-50 mt-1">Configure approval workflows and team preferences</p>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs tabs-bordered mb-6">
+    <a class="tab tab-active" id="tab-approvals">Approval Rules</a>
+    <a class="tab" id="tab-team">Team Members</a>
+    <a class="tab" id="tab-notifications">Notifications</a>
+  </div>
+
+  <!-- Approval Rules Tab Content -->
+  <div id="content-approvals">
+    <!-- Add Rule Button -->
+    <div class="flex justify-end mb-4">
+      <button id="btn-add-rule" class="btn btn-primary btn-sm">+ Add Approval Rule</button>
+    </div>
+
+    <!-- Rules List -->
+    <div id="rules-loading" class="flex justify-center py-8">
+      <span class="loading loading-spinner loading-lg"></span>
+    </div>
+    <div id="rules-empty" class="hidden text-center py-12 opacity-50">
+      <p class="text-lg font-semibold">No approval rules configured</p>
+      <p class="text-sm mt-1">Add rules to require multiple approvals for invoices above certain amounts.</p>
+    </div>
+    <div id="rules-list" class="hidden space-y-3"></div>
+  </div>
+
+  <!-- Team Members Tab Content (placeholder) -->
+  <div id="content-team" class="hidden">
+    <div class="text-center py-12 opacity-50">
+      <p class="text-lg font-semibold">Team Management</p>
+      <p class="text-sm mt-1">Invite team members and manage roles. Coming soon.</p>
+    </div>
+  </div>
+
+  <!-- Notifications Tab Content -->
+  <div id="content-notifications" class="hidden">
+    <div id="notif-loading" class="flex justify-center py-8">
+      <span class="loading loading-spinner loading-lg"></span>
+    </div>
+    <div id="notif-form-wrapper" class="hidden max-w-xl">
+      <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+          <h3 class="font-semibold text-base mb-4">Notification Channels</h3>
+
+          <div class="form-control mb-4">
+            <label class="label cursor-pointer justify-start gap-3">
+              <input type="checkbox" id="notif-email" class="toggle toggle-primary" />
+              <div>
+                <span class="label-text font-medium">Email Notifications</span>
+                <p class="text-xs opacity-50">Get notified when new invoices are processed</p>
+              </div>
+            </label>
+          </div>
+
+          <div class="form-control mb-2">
+            <label class="label cursor-pointer justify-start gap-3">
+              <input type="checkbox" id="notif-slack" class="toggle toggle-primary" />
+              <div>
+                <span class="label-text font-medium">Slack Notifications</span>
+                <p class="text-xs opacity-50">Send invoice alerts to a Slack channel</p>
+              </div>
+            </label>
+          </div>
+
+          <div id="notif-slack-config" class="ml-12 mb-4 hidden">
+            <div class="form-control w-full">
+              <label class="label" for="notif-slack-url">
+                <span class="label-text text-sm">Webhook URL</span>
+              </label>
+              <input id="notif-slack-url" type="url"
+                placeholder="https://hooks.slack.com/services/..."
+                class="input input-bordered input-sm w-full" />
+              <label class="label">
+                <span class="label-text-alt opacity-50">
+                  In your Slack app &rarr; <strong>Incoming Webhooks</strong> &rarr; <strong>Add New Webhook to Workspace</strong>, pick a channel, copy the URL.
+                </span>
+              </label>
+            </div>
+            <button id="notif-test-slack" class="btn btn-outline btn-sm mt-2">
+              <span id="notif-test-text">Send Test Message</span>
+              <span id="notif-test-loading" class="loading loading-spinner loading-xs hidden"></span>
+            </button>
+            <span id="notif-test-result" class="text-sm ml-2 hidden"></span>
+          </div>
+
+          <div class="divider text-xs opacity-50">Auto-Approve</div>
+
+          <div class="form-control w-full mb-4">
+            <label class="label" for="notif-auto-approve">
+              <span class="label-text font-medium">Auto-Approve Threshold</span>
+            </label>
+            <label class="input-group">
+              <span>$</span>
+              <input id="notif-auto-approve" type="number" step="0.01" min="0" value="0"
+                class="input input-bordered input-sm w-full" />
+            </label>
+            <label class="label">
+              <span class="label-text-alt opacity-50">Invoices under this amount auto-approve. 0 = disabled.</span>
+            </label>
+          </div>
+
+          <div class="flex justify-end gap-2">
+            <button id="notif-save" class="btn btn-primary btn-sm">
+              <span id="notif-save-text">Save Preferences</span>
+              <span id="notif-save-loading" class="loading loading-spinner loading-xs hidden"></span>
+            </button>
+          </div>
+          <div id="notif-save-result" class="text-sm mt-2 hidden"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Rule Modal -->
+  <dialog id="rule-modal" class="modal">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg" id="rule-modal-title">Add Approval Rule</h3>
+      <div class="form-control mt-4">
+        <label class="label"><span class="label-text">Rule Name</span></label>
+        <input id="rule-name" type="text" class="input input-bordered" placeholder="e.g., High-value invoices" />
+      </div>
+      <div class="grid grid-cols-2 gap-4 mt-3">
+        <div class="form-control">
+          <label class="label"><span class="label-text">Min Amount ($)</span></label>
+          <input id="rule-min" type="number" class="input input-bordered" placeholder="0" />
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Max Amount ($)</span></label>
+          <input id="rule-max" type="number" class="input input-bordered" placeholder="No limit" />
+        </div>
+      </div>
+      <div class="form-control mt-3">
+        <label class="label"><span class="label-text">Required Approvals</span></label>
+        <input id="rule-approvers-count" type="number" class="input input-bordered" min="1" max="5" value="1" />
+      </div>
+      <div class="form-control mt-3">
+        <label class="label"><span class="label-text">Approver Emails (comma-separated)</span></label>
+        <input id="rule-approver-emails" type="text" class="input input-bordered" placeholder="cfo@company.com, finance@company.com" />
+      </div>
+      <div class="modal-action">
+        <button id="rule-cancel" class="btn btn-ghost">Cancel</button>
+        <button id="rule-save" class="btn btn-primary">Save Rule</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+
+  <!-- Delete Confirmation Modal -->
+  <dialog id="delete-modal" class="modal">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg">Delete Approval Rule</h3>
+      <p class="py-4">Are you sure you want to delete this rule? This action cannot be undone.</p>
+      <div class="modal-action">
+        <button id="delete-cancel" class="btn btn-ghost">Cancel</button>
+        <button id="delete-confirm" class="btn btn-error">Delete</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+</DashboardLayout>
+
+<script>
+  import { supabase, FUNCTIONS_URL } from '../lib/supabase';
+
+  // ─── Types ──────────────────────────────────────────────────────
+  interface ApprovalRule {
+    id: string;
+    name: string;
+    min_amount: number | null;
+    max_amount: number | null;
+    required_approvals: number;
+    approver_emails: string[];
+    is_active: boolean;
+    created_at: string;
+    updated_at: string | null;
+  }
+
+  // ─── State ──────────────────────────────────────────────────────
+  let rules: ApprovalRule[] = [];
+  let editingRuleId: string | null = null;
+  let deletingRuleId: string | null = null;
+
+  // ─── DOM References ─────────────────────────────────────────────
+  const tabApprovals = document.getElementById('tab-approvals')!;
+  const tabTeam = document.getElementById('tab-team')!;
+  const tabNotifications = document.getElementById('tab-notifications')!;
+
+  const contentApprovals = document.getElementById('content-approvals')!;
+  const contentTeam = document.getElementById('content-team')!;
+  const contentNotifications = document.getElementById('content-notifications')!;
+
+  const rulesLoading = document.getElementById('rules-loading')!;
+  const rulesEmpty = document.getElementById('rules-empty')!;
+  const rulesList = document.getElementById('rules-list')!;
+
+  const btnAddRule = document.getElementById('btn-add-rule')!;
+  const ruleModal = document.getElementById('rule-modal') as HTMLDialogElement;
+  const ruleModalTitle = document.getElementById('rule-modal-title')!;
+  const ruleNameInput = document.getElementById('rule-name') as HTMLInputElement;
+  const ruleMinInput = document.getElementById('rule-min') as HTMLInputElement;
+  const ruleMaxInput = document.getElementById('rule-max') as HTMLInputElement;
+  const ruleApproversCountInput = document.getElementById('rule-approvers-count') as HTMLInputElement;
+  const ruleApproverEmailsInput = document.getElementById('rule-approver-emails') as HTMLInputElement;
+  const ruleCancelBtn = document.getElementById('rule-cancel')!;
+  const ruleSaveBtn = document.getElementById('rule-save')!;
+
+  const deleteModal = document.getElementById('delete-modal') as HTMLDialogElement;
+  const deleteCancelBtn = document.getElementById('delete-cancel')!;
+  const deleteConfirmBtn = document.getElementById('delete-confirm')!;
+
+  // ─── Tabs ───────────────────────────────────────────────────────
+  const tabs = [tabApprovals, tabTeam, tabNotifications];
+  const contents = [contentApprovals, contentTeam, contentNotifications];
+
+  tabs.forEach((tab, index) => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('tab-active'));
+      contents.forEach(c => c.classList.add('hidden'));
+      tab.classList.add('tab-active');
+      contents[index].classList.remove('hidden');
+    });
+  });
+
+  // ─── Auth ───────────────────────────────────────────────────────
+  async function getAuthToken(): Promise<string | null> {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token ?? null;
+  }
+
+  // ─── Formatters ─────────────────────────────────────────────────
+  const currencyFormatter = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+
+  function formatAmount(amount: number | null): string {
+    if (amount === null || amount === undefined) return 'Any';
+    return currencyFormatter.format(amount);
+  }
+
+  function escapeHtml(str: string): string {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // ─── Fetch Rules ────────────────────────────────────────────────
+  async function fetchRules(): Promise<void> {
+    rulesLoading.classList.remove('hidden');
+    rulesEmpty.classList.add('hidden');
+    rulesList.classList.add('hidden');
+
+    try {
+      const token = await getAuthToken();
+      if (!token) {
+        window.location.href = '/login';
+        return;
+      }
+
+      const res = await fetch(`${FUNCTIONS_URL}/admin-approval-rules`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        // If the endpoint is not deployed yet, show empty state gracefully
+        console.warn('Approval rules endpoint returned', res.status);
+        rules = [];
+      } else {
+        const data = await res.json();
+        rules = data.rules || data || [];
+        if (!Array.isArray(rules)) rules = [];
+      }
+    } catch (err) {
+      // Handle network errors gracefully (endpoint may not be deployed)
+      console.warn('Could not fetch approval rules:', err);
+      rules = [];
+    }
+
+    renderRules();
+  }
+
+  // ─── Render Rules ───────────────────────────────────────────────
+  function renderRules(): void {
+    rulesLoading.classList.add('hidden');
+
+    if (rules.length === 0) {
+      rulesEmpty.classList.remove('hidden');
+      rulesList.classList.add('hidden');
+      return;
+    }
+
+    rulesEmpty.classList.add('hidden');
+    rulesList.classList.remove('hidden');
+
+    rulesList.innerHTML = rules.map(rule => {
+      const minDisplay = rule.min_amount !== null ? formatAmount(rule.min_amount) : '$0';
+      const maxDisplay = rule.max_amount !== null ? formatAmount(rule.max_amount) : 'No limit';
+      const emailsDisplay = (rule.approver_emails || []).map(e => escapeHtml(e)).join(', ') || 'None specified';
+      const activeClass = rule.is_active ? 'toggle-success' : '';
+      const activeLabel = rule.is_active ? 'Active' : 'Inactive';
+
+      return `
+        <div class="card bg-base-100 shadow-sm" data-rule-id="${rule.id}">
+          <div class="card-body p-4">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div class="flex-1">
+                <h3 class="font-semibold text-base">${escapeHtml(rule.name)}</h3>
+                <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm opacity-70">
+                  <span>Amount: ${minDisplay} - ${maxDisplay}</span>
+                  <span>Required approvals: ${rule.required_approvals}</span>
+                </div>
+                <div class="mt-1 text-sm opacity-50">
+                  Approvers: ${emailsDisplay}
+                </div>
+              </div>
+              <div class="flex items-center gap-3">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <span class="text-xs opacity-60">${activeLabel}</span>
+                  <input type="checkbox" class="toggle toggle-sm ${activeClass}" data-toggle-rule="${rule.id}" ${rule.is_active ? 'checked' : ''} />
+                </label>
+                <button class="btn btn-ghost btn-sm" data-edit-rule="${rule.id}" title="Edit rule">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+                <button class="btn btn-ghost btn-sm text-error" data-delete-rule="${rule.id}" title="Delete rule">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Bind edit buttons
+    rulesList.querySelectorAll<HTMLButtonElement>('[data-edit-rule]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ruleId = btn.dataset.editRule!;
+        openEditModal(ruleId);
+      });
+    });
+
+    // Bind delete buttons
+    rulesList.querySelectorAll<HTMLButtonElement>('[data-delete-rule]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ruleId = btn.dataset.deleteRule!;
+        openDeleteModal(ruleId);
+      });
+    });
+
+    // Bind toggle switches
+    rulesList.querySelectorAll<HTMLInputElement>('[data-toggle-rule]').forEach(toggle => {
+      toggle.addEventListener('change', () => {
+        const ruleId = toggle.dataset.toggleRule!;
+        toggleRule(ruleId, toggle.checked);
+      });
+    });
+  }
+
+  // ─── Modal Helpers ──────────────────────────────────────────────
+  function resetModal(): void {
+    editingRuleId = null;
+    ruleModalTitle.textContent = 'Add Approval Rule';
+    ruleNameInput.value = '';
+    ruleMinInput.value = '';
+    ruleMaxInput.value = '';
+    ruleApproversCountInput.value = '1';
+    ruleApproverEmailsInput.value = '';
+  }
+
+  function openAddModal(): void {
+    resetModal();
+    ruleModal.showModal();
+  }
+
+  function openEditModal(ruleId: string): void {
+    const rule = rules.find(r => r.id === ruleId);
+    if (!rule) return;
+
+    editingRuleId = ruleId;
+    ruleModalTitle.textContent = 'Edit Approval Rule';
+    ruleNameInput.value = rule.name;
+    ruleMinInput.value = rule.min_amount !== null ? String(rule.min_amount) : '';
+    ruleMaxInput.value = rule.max_amount !== null ? String(rule.max_amount) : '';
+    ruleApproversCountInput.value = String(rule.required_approvals);
+    ruleApproverEmailsInput.value = (rule.approver_emails || []).join(', ');
+    ruleModal.showModal();
+  }
+
+  function openDeleteModal(ruleId: string): void {
+    deletingRuleId = ruleId;
+    deleteModal.showModal();
+  }
+
+  // ─── Save Rule ──────────────────────────────────────────────────
+  async function saveRule(): Promise<void> {
+    const name = ruleNameInput.value.trim();
+    if (!name) {
+      ruleNameInput.classList.add('input-error');
+      return;
+    }
+    ruleNameInput.classList.remove('input-error');
+
+    const minAmount = ruleMinInput.value ? parseFloat(ruleMinInput.value) : null;
+    const maxAmount = ruleMaxInput.value ? parseFloat(ruleMaxInput.value) : null;
+    const requiredApprovals = parseInt(ruleApproversCountInput.value, 10) || 1;
+    const approverEmails = ruleApproverEmailsInput.value
+      .split(',')
+      .map(e => e.trim())
+      .filter(e => e.length > 0);
+
+    const token = await getAuthToken();
+    if (!token) {
+      window.location.href = '/login';
+      return;
+    }
+
+    const payload: Record<string, any> = {
+      name,
+      min_amount: minAmount,
+      max_amount: maxAmount,
+      required_approvals: requiredApprovals,
+      approver_emails: approverEmails,
+    };
+
+    ruleSaveBtn.classList.add('loading');
+
+    try {
+      const method = editingRuleId ? 'PUT' : 'POST';
+      const url = editingRuleId
+        ? `${FUNCTIONS_URL}/admin-approval-rules?id=${encodeURIComponent(editingRuleId)}`
+        : `${FUNCTIONS_URL}/admin-approval-rules`;
+
+      if (editingRuleId) {
+        payload.id = editingRuleId;
+      }
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Request failed with status ${res.status}`);
+      }
+
+      ruleModal.close();
+      await fetchRules();
+    } catch (err: any) {
+      console.error('Failed to save rule:', err);
+      alert(`Failed to save rule: ${err.message}`);
+    } finally {
+      ruleSaveBtn.classList.remove('loading');
+    }
+  }
+
+  // ─── Delete Rule ────────────────────────────────────────────────
+  async function deleteRule(): Promise<void> {
+    if (!deletingRuleId) return;
+
+    const token = await getAuthToken();
+    if (!token) {
+      window.location.href = '/login';
+      return;
+    }
+
+    deleteConfirmBtn.classList.add('loading');
+
+    try {
+      const res = await fetch(`${FUNCTIONS_URL}/admin-approval-rules?id=${encodeURIComponent(deletingRuleId)}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Request failed with status ${res.status}`);
+      }
+
+      deleteModal.close();
+      deletingRuleId = null;
+      await fetchRules();
+    } catch (err: any) {
+      console.error('Failed to delete rule:', err);
+      alert(`Failed to delete rule: ${err.message}`);
+    } finally {
+      deleteConfirmBtn.classList.remove('loading');
+    }
+  }
+
+  // ─── Toggle Rule Active/Inactive ───────────────────────────────
+  async function toggleRule(ruleId: string, isActive: boolean): Promise<void> {
+    const token = await getAuthToken();
+    if (!token) {
+      window.location.href = '/login';
+      return;
+    }
+
+    try {
+      const res = await fetch(`${FUNCTIONS_URL}/admin-approval-rules?id=${encodeURIComponent(ruleId)}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id: ruleId, is_active: isActive }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Request failed with status ${res.status}`);
+      }
+
+      // Update local state
+      const rule = rules.find(r => r.id === ruleId);
+      if (rule) rule.is_active = isActive;
+    } catch (err: any) {
+      console.error('Failed to toggle rule:', err);
+      alert(`Failed to update rule: ${err.message}`);
+      // Re-render to revert toggle state
+      renderRules();
+    }
+  }
+
+  // ─── Event Listeners ───────────────────────────────────────────
+  btnAddRule.addEventListener('click', openAddModal);
+  ruleCancelBtn.addEventListener('click', () => ruleModal.close());
+  ruleSaveBtn.addEventListener('click', saveRule);
+  deleteCancelBtn.addEventListener('click', () => {
+    deletingRuleId = null;
+    deleteModal.close();
+  });
+  deleteConfirmBtn.addEventListener('click', deleteRule);
+
+  // ─── Notifications Tab ──────────────────────────────────────
+  const notifLoading = document.getElementById('notif-loading')!;
+  const notifFormWrapper = document.getElementById('notif-form-wrapper')!;
+  const notifEmail = document.getElementById('notif-email') as HTMLInputElement;
+  const notifSlack = document.getElementById('notif-slack') as HTMLInputElement;
+  const notifSlackConfig = document.getElementById('notif-slack-config')!;
+  const notifSlackUrl = document.getElementById('notif-slack-url') as HTMLInputElement;
+  const notifAutoApprove = document.getElementById('notif-auto-approve') as HTMLInputElement;
+  const notifSaveBtn = document.getElementById('notif-save')!;
+  const notifSaveText = document.getElementById('notif-save-text')!;
+  const notifSaveLoading = document.getElementById('notif-save-loading')!;
+  const notifSaveResult = document.getElementById('notif-save-result')!;
+  const notifTestBtn = document.getElementById('notif-test-slack')!;
+  const notifTestText = document.getElementById('notif-test-text')!;
+  const notifTestLoading = document.getElementById('notif-test-loading')!;
+  const notifTestResult = document.getElementById('notif-test-result')!;
+
+  notifSlack.addEventListener('change', () => {
+    notifSlackConfig.classList.toggle('hidden', !notifSlack.checked);
+  });
+
+  let notifPrefsLoaded = false;
+
+  async function loadNotifPrefs(): Promise<void> {
+    if (notifPrefsLoaded) return;
+    const token = await getAuthToken();
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${FUNCTIONS_URL}/onboarding-state`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const prefs = data.preferences || {};
+
+        notifEmail.checked = prefs.notification_email !== false;
+        notifSlack.checked = !!prefs.notification_slack;
+        notifSlackUrl.value = prefs.slack_webhook_url || '';
+        notifAutoApprove.value = String(prefs.auto_approve_threshold || 0);
+
+        if (notifSlack.checked) {
+          notifSlackConfig.classList.remove('hidden');
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load notification prefs:', err);
+    }
+
+    notifLoading.classList.add('hidden');
+    notifFormWrapper.classList.remove('hidden');
+    notifPrefsLoaded = true;
+  }
+
+  notifSaveBtn.addEventListener('click', async () => {
+    const token = await getAuthToken();
+    if (!token) return;
+
+    notifSaveText.classList.add('hidden');
+    notifSaveLoading.classList.remove('hidden');
+    notifSaveResult.classList.add('hidden');
+
+    try {
+      const res = await fetch(`${FUNCTIONS_URL}/onboarding-state`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          step: 'preferences',
+          data: {
+            notification_email: notifEmail.checked,
+            notification_slack: notifSlack.checked,
+            slack_webhook_url: notifSlackUrl.value.trim() || null,
+            auto_approve_threshold: parseFloat(notifAutoApprove.value) || 0,
+          },
+        }),
+      });
+
+      if (res.ok) {
+        notifSaveResult.textContent = 'Saved!';
+        notifSaveResult.className = 'text-sm mt-2 text-success';
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+        notifSaveResult.textContent = err.error || 'Failed to save';
+        notifSaveResult.className = 'text-sm mt-2 text-error';
+      }
+      notifSaveResult.classList.remove('hidden');
+      setTimeout(() => notifSaveResult.classList.add('hidden'), 3000);
+    } catch (err: any) {
+      notifSaveResult.textContent = err.message || 'Failed to save';
+      notifSaveResult.className = 'text-sm mt-2 text-error';
+      notifSaveResult.classList.remove('hidden');
+    } finally {
+      notifSaveText.classList.remove('hidden');
+      notifSaveLoading.classList.add('hidden');
+    }
+  });
+
+  notifTestBtn.addEventListener('click', async () => {
+    const webhookUrl = notifSlackUrl.value.trim();
+    if (!webhookUrl) {
+      notifTestResult.textContent = 'Enter a webhook URL first';
+      notifTestResult.className = 'text-sm ml-2 text-warning';
+      notifTestResult.classList.remove('hidden');
+      return;
+    }
+
+    notifTestText.classList.add('hidden');
+    notifTestLoading.classList.remove('hidden');
+    notifTestResult.classList.add('hidden');
+
+    try {
+      const res = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          blocks: [
+            {
+              type: 'header',
+              text: { type: 'plain_text', text: ':white_check_mark: Test Notification', emoji: true },
+            },
+            {
+              type: 'section',
+              text: { type: 'mrkdwn', text: 'Slack notifications are working! You will receive alerts here when invoices are processed, approved, or synced.' },
+            },
+          ],
+        }),
+      });
+
+      if (res.ok) {
+        notifTestResult.textContent = 'Sent! Check your Slack channel.';
+        notifTestResult.className = 'text-sm ml-2 text-success';
+      } else {
+        notifTestResult.textContent = `Failed (${res.status}). Check your webhook URL.`;
+        notifTestResult.className = 'text-sm ml-2 text-error';
+      }
+    } catch {
+      notifTestResult.textContent = 'Failed to send. Check the URL is correct.';
+      notifTestResult.className = 'text-sm ml-2 text-error';
+    } finally {
+      notifTestText.classList.remove('hidden');
+      notifTestLoading.classList.add('hidden');
+      notifTestResult.classList.remove('hidden');
+      setTimeout(() => notifTestResult.classList.add('hidden'), 5000);
+    }
+  });
+
+  tabNotifications.addEventListener('click', () => {
+    loadNotifPrefs();
+  });
+
+  // ─── Initial Load ──────────────────────────────────────────────
+  fetchRules();
+</script>

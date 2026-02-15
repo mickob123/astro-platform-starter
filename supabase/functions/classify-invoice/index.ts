@@ -44,6 +44,16 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Guard against oversized payloads that could cause excessive API costs
+    const MAX_TEXT_LENGTH = 100_000; // ~100KB of text
+    const totalLength = (email_subject?.length || 0) + (email_body?.length || 0) + (attachment_text?.length || 0);
+    if (totalLength > MAX_TEXT_LENGTH) {
+      return new Response(
+        JSON.stringify({ error: `Request body text exceeds maximum allowed length of ${MAX_TEXT_LENGTH} characters` }),
+        { status: 413, headers: { ...headers, "Content-Type": "application/json" } },
+      );
+    }
+
     const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
 
     const userContent = `Email Subject: ${email_subject}\n\nEmail Body:\n${email_body}\n\n${

@@ -6,24 +6,20 @@
         "pollTimes": {
           "item": [
             {
-              "mode": "everyMinute",
-              "minute": 1
+              "mode": "everyMinute"
             }
           ]
         },
         "filters": {
-          "readStatus": "unread",
-          "receivedAfter": "={{ $now.minus(1, 'day').toISO() }}"
+          "readStatus": "unread"
         },
-        "options": {
-          "downloadAttachments": true
-        }
+        "options": {}
       },
       "id": "gmail-trigger",
       "name": "Gmail Trigger",
       "type": "n8n-nodes-base.gmailTrigger",
       "typeVersion": 1,
-      "position": [250, 300],
+      "position": [256, 304],
       "credentials": {
         "gmailOAuth2": {
           "id": "REPLACE_WITH_GMAIL_CREDENTIAL_ID",
@@ -33,8 +29,107 @@
     },
     {
       "parameters": {
+        "method": "GET",
+        "url": "=https://gmail.googleapis.com/gmail/v1/users/me/messages/{{ $json.id }}?format=full",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "gmailOAuth2",
+        "options": {}
+      },
+      "id": "fetch-full-email",
+      "name": "Fetch Full Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 304],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail — [CUSTOMER_NAME]"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const msg = item.json;\n  const headers = (msg.payload && msg.payload.headers) || [];\n  let emailSubject = '';\n  let fromAddr = '';\n  for (const h of headers) {\n    if (h.name.toLowerCase() === 'subject') emailSubject = h.value;\n    if (h.name.toLowerCase() === 'from') fromAddr = h.value;\n  }\n\n  function findPart(part, mimeType) {\n    if (part.mimeType === mimeType && part.body && part.body.data) {\n      return part.body.data;\n    }\n    if (part.parts) {\n      for (const child of part.parts) {\n        const found = findPart(child, mimeType);\n        if (found) return found;\n      }\n    }\n    return null;\n  }\n\n  function decodeB64Url(data) {\n    const b64 = data.replace(/-/g, '+').replace(/_/g, '/');\n    return Buffer.from(b64, 'base64').toString('utf-8');\n  }\n\n  let emailBody = '';\n  const plainData = findPart(msg.payload, 'text/plain');\n  if (plainData) {\n    emailBody = decodeB64Url(plainData);\n  }\n  if (!emailBody) {\n    const htmlData = findPart(msg.payload, 'text/html');\n    if (htmlData) {\n      let html = decodeB64Url(htmlData);\n      emailBody = html\n        .replace(/<style[^>]*>[\\s\\S]*?<\\/style>/gi, '')\n        .replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi, '')\n        .replace(/<br\\s*\\/?>/gi, '\\n')\n        .replace(/<\\/p>/gi, '\\n')\n        .replace(/<\\/div>/gi, '\\n')\n        .replace(/<\\/tr>/gi, '\\n')\n        .replace(/<\\/li>/gi, '\\n')\n        .replace(/<td[^>]*>/gi, ' ')\n        .replace(/<[^>]+>/g, '')\n        .replace(/&nbsp;/g, ' ')\n        .replace(/&amp;/g, '&')\n        .replace(/&lt;/g, '<')\n        .replace(/&gt;/g, '>')\n        .replace(/&quot;/g, '\"')\n        .replace(/&#39;/g, \"'\")\n        .replace(/&#\\d+;/g, '')\n        .replace(/\\n{3,}/g, '\\n\\n')\n        .trim();\n    }\n  }\n  if (!emailBody) {\n    emailBody = msg.snippet || '';\n  }\n\n  // Find PDF attachment ID\n  let pdfAttachmentId = null;\n  function findPdf(part) {\n    if (part.filename && part.body && part.body.attachmentId) {\n      const mime = (part.mimeType || '').toLowerCase();\n      const fname = (part.filename || '').toLowerCase();\n      if (mime === 'application/pdf' || fname.endsWith('.pdf')) {\n        return part.body.attachmentId;\n      }\n    }\n    if (part.parts) {\n      for (const child of part.parts) {\n        const found = findPdf(child);\n        if (found) return found;\n      }\n    }\n    return null;\n  }\n  pdfAttachmentId = findPdf(msg.payload);\n\n  // Always fetch PDF if present — needed for Storage upload\n  const needPdf = !!pdfAttachmentId;\n\n  results.push({\n    json: {\n      email_subject: emailSubject,\n      email_body: emailBody,\n      attachment_id: needPdf ? pdfAttachmentId : null,\n      message_id: msg.id,\n      has_pdf: !!pdfAttachmentId,\n      metadata: {\n        gmail_message_id: msg.id,\n        gmail_thread_id: msg.threadId,\n        from: fromAddr,\n      },\n    },\n  });\n}\n\nreturn results;"
+      },
+      "id": "parse-email",
+      "name": "Parse Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 304]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-pdf",
+              "leftValue": "={{ $json.attachment_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-pdf-check",
+      "name": "Has PDF?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 304]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://gmail.googleapis.com/gmail/v1/users/me/messages/{{ $json.message_id }}/attachments/{{ $json.attachment_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "gmailOAuth2",
+        "options": {}
+      },
+      "id": "fetch-pdf",
+      "name": "Fetch PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 200],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail — [CUSTOMER_NAME]"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst prev = items[0].json;\nconst attachData = prev.data || '';\nconst base64 = attachData.replace(/-/g, '+').replace(/_/g, '/');\nconst parseNode = $('Parse Email').first().json;\n\nreturn [{\n  json: {\n    email_subject: parseNode.email_subject,\n    email_body: parseNode.email_body,\n    attachment_base64: base64,\n    metadata: parseNode.metadata,\n  },\n}];"
+      },
+      "id": "merge-pdf",
+      "name": "Merge PDF Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst prev = items[0].json;\n\nreturn [{\n  json: {\n    email_subject: prev.email_subject,\n    email_body: prev.email_body,\n    attachment_base64: null,\n    metadata: prev.metadata,\n  },\n}];"
+      },
+      "id": "no-pdf",
+      "name": "No PDF Path",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 420]
+    },
+    {
+      "parameters": {
         "method": "POST",
-        "url": "https://tcgptxbqqyxmvsaqiblc.supabase.co/functions/v1/process-invoice",
+        "url": "REPLACE_WITH_SUPABASE_URL/functions/v1/process-invoice",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -45,26 +140,30 @@
             {
               "name": "x-api-key",
               "value": "REPLACE_WITH_CUSTOMER_API_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer REPLACE_WITH_SUPABASE_ANON_KEY"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ email_subject: $json.subject, email_body: $json.snippet || $json.textPlain || '', attachment_text: $json.textPlain || null, metadata: { gmail_message_id: $json.id, gmail_thread_id: $json.threadId, from: $json.from, received_at: $json.date } }) }}",
+        "jsonBody": "={{ JSON.stringify({ email_subject: $json.email_subject, email_body: $json.email_body, attachment_base64: $json.attachment_base64 || null, metadata: $json.metadata }) }}",
         "options": {
-          "timeout": 120000,
           "response": {
             "response": {
               "fullResponse": true
             }
-          }
+          },
+          "timeout": 120000
         }
       },
       "id": "process-invoice",
       "name": "Process Invoice",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [500, 300]
+      "position": [1750, 304]
     },
     {
       "parameters": {
@@ -93,7 +192,7 @@
       "name": "Success?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [750, 300]
+      "position": [2000, 304]
     },
     {
       "parameters": {
@@ -113,7 +212,7 @@
       "name": "Log Success",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [1000, 200]
+      "position": [2250, 208]
     },
     {
       "parameters": {
@@ -133,11 +232,191 @@
       "name": "Log Error",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [1000, 400]
+      "position": [2250, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const logNode = $input.first().json;\n\n// Get PDF data from Fetch PDF node (if it was executed)\nlet attachData = null;\ntry {\n  const fetchPdf = $('Fetch PDF').first();\n  if (fetchPdf && fetchPdf.json && fetchPdf.json.data) {\n    attachData = fetchPdf.json.data;\n  }\n} catch (e) {\n  // Fetch PDF node wasn't executed (no PDF path)\n}\n\nif (!attachData) {\n  return [];\n}\n\n// Get invoice_id from Process Invoice response\nconst processNode = $('Process Invoice').first();\nlet body = processNode.json.body || processNode.json;\n\n// Handle body as string (n8n may not auto-parse)\nif (typeof body === 'string') {\n  try { body = JSON.parse(body); } catch (e) { body = {}; }\n}\n\nconst invoiceId = body.invoice_id;\nif (!invoiceId) {\n  return [];\n}\n\n// Convert base64url to standard base64\nconst base64 = attachData.replace(/-/g, '+').replace(/_/g, '/');\nconst buffer = Buffer.from(base64, 'base64');\n\nreturn [{\n  json: {\n    invoice_id: invoiceId,\n    pdf_size: buffer.length,\n  },\n  binary: {\n    data: {\n      data: base64,\n      mimeType: 'application/pdf',\n      fileName: invoiceId + '.pdf',\n    },\n  },\n}];"
+      },
+      "id": "prepare-pdf",
+      "name": "Prepare PDF Upload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2500, 208]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=REPLACE_WITH_SUPABASE_URL/functions/v1/upload-invoice-pdf?invoice_id={{ $json.invoice_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/pdf"
+            },
+            {
+              "name": "x-api-key",
+              "value": "REPLACE_WITH_CUSTOMER_API_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer REPLACE_WITH_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "upload-pdf",
+      "name": "Upload PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2750, 208],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "log-pdf",
+              "name": "pdf_result",
+              "value": "={{ 'PDF uploaded: ' + ($json.body ? JSON.stringify($json.body) : 'unknown') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "log-pdf",
+      "name": "Log PDF Upload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [3000, 208]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the Process Invoice response to extract invoice data\nconst processNode = $('Process Invoice').first();\nlet body = processNode.json.body || processNode.json;\n\n// Handle body as string (n8n may not auto-parse)\nif (typeof body === 'string') {\n  try { body = JSON.parse(body); } catch (e) { body = {}; }\n}\n\nconst invoiceId = body.invoice_id || 'unknown';\nconst vendor = body.vendor || 'Unknown Vendor';\nconst amount = body.amount || 0;\nconst currency = body.currency || 'USD';\nconst dueDate = body.due_date || 'Not specified';\nconst invoiceNumber = body.invoice_number || 'N/A';\nconst confidence = typeof body.confidence === 'number' ? body.confidence : 0;\n\n// Build invoice URL\nconst invoiceUrl = 'https://refundrescue.netlify.app/invoice/' + invoiceId;\n\n// Format currency\nconst formattedAmount = new Intl.NumberFormat('en-US', {\n  style: 'currency',\n  currency: currency,\n}).format(amount);\n\n// Confidence display\nconst confidencePercent = Math.round(confidence * 100);\nconst confidenceEmoji = confidence >= 0.9 ? ':white_check_mark:' : confidence >= 0.7 ? ':large_yellow_circle:' : ':warning:';\nconst confidenceLabel = confidence >= 0.9 ? 'High' : confidence >= 0.7 ? 'Medium' : 'Low';\n\n// Build Slack Block Kit payload\nconst blocks = [\n  {\n    type: 'header',\n    text: { type: 'plain_text', text: ':page_facing_up: New Invoice Received', emoji: true },\n  },\n  {\n    type: 'section',\n    fields: [\n      { type: 'mrkdwn', text: '*Vendor:*\\n' + vendor },\n      { type: 'mrkdwn', text: '*Invoice #:*\\n' + invoiceNumber },\n      { type: 'mrkdwn', text: '*Amount:*\\n' + formattedAmount },\n      { type: 'mrkdwn', text: '*Due Date:*\\n' + dueDate },\n    ],\n  },\n  {\n    type: 'section',\n    text: { type: 'mrkdwn', text: confidenceEmoji + ' *Confidence:* ' + confidenceLabel + ' (' + confidencePercent + '%)' },\n    accessory: {\n      type: 'button',\n      text: { type: 'plain_text', text: 'View Invoice', emoji: true },\n      url: invoiceUrl,\n      action_id: 'view_invoice',\n    },\n  },\n  { type: 'divider' },\n  {\n    type: 'actions',\n    elements: [\n      {\n        type: 'button',\n        text: { type: 'plain_text', text: ':white_check_mark: Approve', emoji: true },\n        style: 'primary',\n        action_id: 'approve_invoice',\n        value: invoiceNumber,\n      },\n      {\n        type: 'button',\n        text: { type: 'plain_text', text: ':triangular_flag_on_post: Flag for Review', emoji: true },\n        style: 'danger',\n        action_id: 'flag_invoice',\n        value: invoiceNumber,\n      },\n    ],\n  },\n];\n\nreturn [{\n  json: {\n    blocks: blocks,\n  },\n}];"
+      },
+      "id": "build-slack-payload",
+      "name": "Build Slack Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2500, -50]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ blocks: $json.blocks }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "send-slack-notification",
+      "name": "Send Slack Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2750, -50],
+      "continueOnFail": true
     }
   ],
   "connections": {
     "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Full Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Full Email": {
+      "main": [
+        [
+          {
+            "node": "Parse Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Email": {
+      "main": [
+        [
+          {
+            "node": "Has PDF?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has PDF?": {
+      "main": [
+        [
+          {
+            "node": "Fetch PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No PDF Path",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch PDF": {
+      "main": [
+        [
+          {
+            "node": "Merge PDF Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge PDF Data": {
+      "main": [
+        [
+          {
+            "node": "Process Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No PDF Path": {
       "main": [
         [
           {
@@ -176,14 +455,60 @@
           }
         ]
       ]
+    },
+    "Log Success": {
+      "main": [
+        [
+          {
+            "node": "Prepare PDF Upload",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Slack Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Slack Payload": {
+      "main": [
+        [
+          {
+            "node": "Send Slack Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare PDF Upload": {
+      "main": [
+        [
+          {
+            "node": "Upload PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload PDF": {
+      "main": [
+        [
+          {
+            "node": "Log PDF Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
     "executionOrder": "v1",
     "saveManualExecutions": true,
     "callerPolicy": "workflowsFromSameOwner"
-  },
-  "meta": {
-    "templateCredsSetupCompleted": false
   }
 }

@@ -1,0 +1,405 @@
+---
+export const prerender = false;
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+---
+
+<DashboardLayout title="Vendors">
+  <!-- Back + Breadcrumb -->
+  <div class="flex items-center gap-3 mb-4">
+    <a href="/dashboard"
+       class="btn btn-sm btn-ghost gap-1 no-underline">
+      <svg xmlns="http://www.w3.org/2000/svg"
+           class="h-4 w-4" fill="none"
+           viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round"
+              stroke-linejoin="round" stroke-width="2"
+              d="M15 19l-7-7 7-7" />
+      </svg>
+      Back
+    </a>
+    <div class="text-sm breadcrumbs">
+      <ul>
+        <li>
+          <a href="/dashboard"
+             class="no-underline text-base-content/60
+                    hover:text-base-content">
+            Dashboard
+          </a>
+        </li>
+        <li class="text-base-content font-medium">
+          Vendors
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold">Vendors</h1>
+      <p class="text-sm opacity-50 mt-1">
+        View and manage your vendor relationships
+      </p>
+    </div>
+  </div>
+
+  <!-- Search + Per Page -->
+  <div class="flex flex-wrap items-end gap-4 mb-4">
+    <div class="form-control">
+      <label class="label py-0.5">
+        <span class="label-text text-xs uppercase
+          tracking-wide font-semibold opacity-50">
+          Search
+        </span>
+      </label>
+      <input id="vendor-search" type="text"
+        class="input input-bordered input-sm w-64"
+        placeholder="Search vendors..." />
+    </div>
+    <div class="form-control">
+      <label class="label py-0.5">
+        <span class="label-text text-xs uppercase
+          tracking-wide font-semibold opacity-50">
+          Per Page
+        </span>
+      </label>
+      <select id="per-page"
+        class="select select-bordered select-sm">
+        <option value="25" selected>25</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div id="vendors-loading"
+    class="flex justify-center py-12">
+    <span class="loading loading-spinner loading-lg">
+    </span>
+  </div>
+
+  <!-- Empty State -->
+  <div id="vendors-empty"
+    class="hidden text-center py-12 opacity-50">
+    <p>No vendors found.</p>
+  </div>
+
+  <!-- Table -->
+  <div id="vendors-table-wrap"
+    class="hidden overflow-x-auto bg-base-100
+           rounded-lg shadow-sm">
+    <table class="table table-sm w-full">
+      <thead>
+        <tr class="text-xs uppercase tracking-wide">
+          <th class="cursor-pointer"
+              data-sort="name">Vendor</th>
+          <th class="cursor-pointer text-right"
+              data-sort="invoices">Invoices</th>
+          <th class="cursor-pointer text-right"
+              data-sort="spend">Total Spend</th>
+          <th class="cursor-pointer"
+              data-sort="latest">Latest Invoice</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="vendors-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  <div id="pagination-wrap"
+    class="hidden flex items-center justify-between
+           mt-4 text-sm">
+    <span id="page-info" class="opacity-50"></span>
+    <div class="join">
+      <button id="btn-prev"
+        class="join-item btn btn-sm">Prev</button>
+      <button id="btn-next"
+        class="join-item btn btn-sm">Next</button>
+    </div>
+  </div>
+</DashboardLayout>
+
+<script>
+  import { supabase } from '../lib/supabase';
+
+  const FUNCTIONS_URL =
+    'https://tcgptxbqqyxmvsaqiblc.supabase.co' +
+    '/functions/v1';
+
+  // ─── Types ──────────────────────────────────────
+  interface VendorRow {
+    id: string;
+    name: string;
+    created_at: string;
+    invoice_count: number;
+    total_spend: number;
+    latest_invoice: string | null;
+    pending: number;
+    approved: number;
+    rejected: number;
+  }
+
+  // ─── State ──────────────────────────────────────
+  let currentPage = 1;
+  let currentSort = 'name';
+  let currentOrder = 'asc';
+  let totalPages = 1;
+  let totalVendors = 0;
+  let debounceTimer: ReturnType<typeof setTimeout>
+    | null = null;
+
+  // ─── DOM refs ───────────────────────────────────
+  const searchInput = document.getElementById(
+    'vendor-search',
+  ) as HTMLInputElement;
+  const perPageSelect = document.getElementById(
+    'per-page',
+  ) as HTMLSelectElement;
+  const loading = document.getElementById(
+    'vendors-loading',
+  )!;
+  const empty = document.getElementById(
+    'vendors-empty',
+  )!;
+  const tableWrap = document.getElementById(
+    'vendors-table-wrap',
+  )!;
+  const tbody = document.getElementById(
+    'vendors-tbody',
+  )!;
+  const paginationWrap = document.getElementById(
+    'pagination-wrap',
+  )!;
+  const pageInfo = document.getElementById(
+    'page-info',
+  )!;
+  const btnPrev = document.getElementById(
+    'btn-prev',
+  ) as HTMLButtonElement;
+  const btnNext = document.getElementById(
+    'btn-next',
+  ) as HTMLButtonElement;
+
+  // ─── Formatters ─────────────────────────────────
+  const currFmt = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  const dateFmt = new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
+  function fmtCurrency(n: number): string {
+    return currFmt.format(n);
+  }
+  function fmtDate(d: string): string {
+    try {
+      return dateFmt.format(new Date(d));
+    } catch {
+      return d;
+    }
+  }
+  function esc(s: string): string {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  // ─── Fetch ──────────────────────────────────────
+  async function fetchVendors(): Promise<void> {
+    loading.classList.remove('hidden');
+    empty.classList.add('hidden');
+    tableWrap.classList.add('hidden');
+    paginationWrap.classList.add('hidden');
+
+    try {
+      const sess = await supabase.auth.getSession();
+      const token = sess.data.session?.access_token;
+      if (!token) {
+        window.location.href = '/login';
+        return;
+      }
+
+      const params = new URLSearchParams({
+        page: String(currentPage),
+        limit: perPageSelect.value,
+        sort: currentSort,
+        order: currentOrder,
+      });
+      const search = searchInput.value.trim();
+      if (search) params.set('search', search);
+
+      const res = await fetch(
+        `${FUNCTIONS_URL}/admin-vendors?${params}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        },
+      );
+
+      if (!res.ok) {
+        console.warn(
+          'admin-vendors returned', res.status,
+        );
+        renderEmpty();
+        return;
+      }
+
+      const data = await res.json();
+      const vendors: VendorRow[] =
+        data.vendors || [];
+      totalPages =
+        data.pagination?.total_pages || 1;
+      totalVendors =
+        data.pagination?.total || 0;
+
+      if (vendors.length === 0) {
+        renderEmpty();
+        return;
+      }
+
+      renderTable(vendors);
+    } catch (err) {
+      console.warn('Could not fetch vendors:', err);
+      renderEmpty();
+    }
+  }
+
+  // ─── Render ─────────────────────────────────────
+  function renderEmpty(): void {
+    loading.classList.add('hidden');
+    empty.classList.remove('hidden');
+    tableWrap.classList.add('hidden');
+    paginationWrap.classList.add('hidden');
+  }
+
+  function renderTable(
+    vendors: VendorRow[],
+  ): void {
+    loading.classList.add('hidden');
+    empty.classList.add('hidden');
+    tableWrap.classList.remove('hidden');
+    paginationWrap.classList.remove('hidden');
+
+    tbody.innerHTML = vendors.map((v) => {
+      const badges: string[] = [];
+      if (v.pending > 0) {
+        badges.push(
+          '<span class="badge badge-sm ' +
+          'badge-warning gap-1">' +
+          v.pending + ' pending</span>',
+        );
+      }
+      if (v.approved > 0) {
+        badges.push(
+          '<span class="badge badge-sm ' +
+          'badge-success gap-1">' +
+          v.approved + ' approved</span>',
+        );
+      }
+      if (v.rejected > 0) {
+        badges.push(
+          '<span class="badge badge-sm ' +
+          'badge-error gap-1">' +
+          v.rejected + ' rejected</span>',
+        );
+      }
+
+      return `<tr class="hover">
+        <td class="font-medium">
+          ${esc(v.name)}
+        </td>
+        <td class="text-right">
+          ${v.invoice_count}
+        </td>
+        <td class="text-right">
+          ${fmtCurrency(v.total_spend)}
+        </td>
+        <td>
+          ${v.latest_invoice
+            ? fmtDate(v.latest_invoice)
+            : '<span class="opacity-30">--</span>'}
+        </td>
+        <td>
+          <div class="flex flex-wrap gap-1">
+            ${badges.join('') ||
+              '<span class="opacity-30">--</span>'}
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+
+    // Update pagination info
+    const perPage = parseInt(
+      perPageSelect.value, 10,
+    );
+    const start =
+      (currentPage - 1) * perPage + 1;
+    const end = Math.min(
+      currentPage * perPage,
+      totalVendors,
+    );
+    pageInfo.textContent =
+      `${start}-${end} of ${totalVendors} vendors`;
+    btnPrev.disabled = currentPage <= 1;
+    btnNext.disabled = currentPage >= totalPages;
+  }
+
+  // ─── Sort headers ───────────────────────────────
+  document
+    .querySelectorAll<HTMLElement>('[data-sort]')
+    .forEach((th) => {
+      th.addEventListener('click', () => {
+        const field = th.dataset.sort!;
+        if (currentSort === field) {
+          currentOrder =
+            currentOrder === 'asc'
+              ? 'desc'
+              : 'asc';
+        } else {
+          currentSort = field;
+          currentOrder = 'asc';
+        }
+        currentPage = 1;
+        fetchVendors();
+      });
+    });
+
+  // ─── Pagination buttons ─────────────────────────
+  btnPrev.addEventListener('click', () => {
+    if (currentPage > 1) {
+      currentPage--;
+      fetchVendors();
+    }
+  });
+  btnNext.addEventListener('click', () => {
+    if (currentPage < totalPages) {
+      currentPage++;
+      fetchVendors();
+    }
+  });
+
+  // ─── Search ─────────────────────────────────────
+  searchInput.addEventListener('input', () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      currentPage = 1;
+      fetchVendors();
+    }, 300);
+  });
+
+  // ─── Per-page change ────────────────────────────
+  perPageSelect.addEventListener('change', () => {
+    currentPage = 1;
+    fetchVendors();
+  });
+
+  // ─── Initial load ──────────────────────────────
+  fetchVendors();
+</script>

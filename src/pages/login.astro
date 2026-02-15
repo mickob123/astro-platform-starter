@@ -1,0 +1,174 @@
+---
+export const prerender = false;
+
+import '../styles/globals.css';
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/800.css';
+---
+
+<!doctype html>
+<html lang="en" data-theme="lofi">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Login | Invoice Dashboard</title>
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body class="min-h-screen bg-base-200 flex items-center justify-center">
+
+    <!-- Redirect if already logged in -->
+    <script>
+      import { supabase } from '../lib/supabase';
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        window.location.href = '/';
+      } else {
+        // Show the login form once we confirm user is not authenticated
+        document.getElementById('login-card')?.classList.remove('opacity-0');
+      }
+    </script>
+
+    <div class="w-full max-w-md px-4">
+      <div id="login-card" class="card bg-base-100 shadow-xl opacity-0 transition-opacity duration-300">
+        <div class="card-body gap-6">
+
+          <!-- Header -->
+          <div class="text-center">
+            <h1 class="text-2xl font-bold tracking-tight text-base-content sm:text-3xl">
+              Invoice Dashboard
+            </h1>
+            <p class="mt-2 text-sm text-base-content/60">
+              Sign in to your account
+            </p>
+          </div>
+
+          <!-- Login Form -->
+          <form id="login-form" class="flex flex-col gap-4">
+            <div class="form-control w-full">
+              <label class="label" for="email">
+                <span class="label-text font-medium">Email</span>
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                autocomplete="email"
+                placeholder="you@company.com"
+                class="input input-bordered w-full focus:input-primary"
+              />
+            </div>
+
+            <div class="form-control w-full">
+              <label class="label" for="password">
+                <span class="label-text font-medium">Password</span>
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                autocomplete="current-password"
+                placeholder="Enter your password"
+                class="input input-bordered w-full focus:input-primary"
+              />
+            </div>
+
+            <button
+              id="submit-btn"
+              type="submit"
+              class="btn btn-primary w-full mt-2"
+            >
+              <span id="btn-text">Sign In</span>
+              <span id="btn-loading" class="loading loading-spinner loading-sm hidden"></span>
+            </button>
+          </form>
+
+          <!-- Error Alert -->
+          <div id="error-alert" class="alert alert-error hidden">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span id="error-message">Invalid email or password.</span>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Create account link -->
+      <p class="text-center text-sm mt-6">
+        Don't have an account?
+        <a href="/signup" class="link link-primary font-medium">Create one</a>
+      </p>
+
+      <footer class="text-center text-xs text-base-content/40 mt-8 space-x-2">
+        <span>&copy; 2026 Agentive Group Co Pty Ltd.</span>
+        <a href="/terms" class="link link-hover">Terms</a>
+        <span>&middot;</span>
+        <a href="/privacy" class="link link-hover">Privacy</a>
+        <span>&middot;</span>
+        <a href="mailto:invoiceautomation@agentivegroup.ai" class="link link-hover">Contact</a>
+      </footer>
+    </div>
+
+    <!-- Login handler -->
+    <script>
+      import { supabase } from '../lib/supabase';
+
+      const form = document.getElementById('login-form') as HTMLFormElement;
+      const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
+      const btnText = document.getElementById('btn-text') as HTMLSpanElement;
+      const btnLoading = document.getElementById('btn-loading') as HTMLSpanElement;
+      const errorAlert = document.getElementById('error-alert') as HTMLDivElement;
+      const errorMessage = document.getElementById('error-message') as HTMLSpanElement;
+
+      function setLoading(loading: boolean) {
+        submitBtn.disabled = loading;
+        btnText.textContent = loading ? 'Signing in...' : 'Sign In';
+        btnLoading.classList.toggle('hidden', !loading);
+      }
+
+      function showError(message: string) {
+        errorMessage.textContent = message;
+        errorAlert.classList.remove('hidden');
+      }
+
+      function hideError() {
+        errorAlert.classList.add('hidden');
+      }
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        hideError();
+        setLoading(true);
+
+        const formData = new FormData(form);
+        const email = formData.get('email') as string;
+        const password = formData.get('password') as string;
+
+        if (!email || !password) {
+          showError('Please enter both email and password.');
+          setLoading(false);
+          return;
+        }
+
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) {
+          showError(error.message === 'Invalid login credentials'
+            ? 'Invalid email or password. Please try again.'
+            : error.message
+          );
+          setLoading(false);
+          return;
+        }
+
+        // Successful login - route via index (checks onboarding state)
+        window.location.href = '/';
+      });
+    </script>
+  </body>
+</html>

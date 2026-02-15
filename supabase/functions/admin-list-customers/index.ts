@@ -47,9 +47,10 @@ Deno.serve(async (req: Request) => {
       .select("id, name, email, is_active, accounting_platform, created_at", { count: "exact" });
 
     if (search) {
-      // Sanitize to prevent PostgREST filter injection
-      const sanitized = search.replace(/[%_(),.\\]/g, "");
-      if (sanitized) {
+      // Sanitize search input: remove characters that could manipulate PostgREST filter syntax
+      // Commas, parens, dots, backslashes, and SQL wildcards can be used for filter injection
+      const sanitized = search.replace(/[%_(),.\\*]/g, "");
+      if (sanitized.length > 0) {
         query = query.or(`name.ilike.%${sanitized}%,email.ilike.%${sanitized}%`);
       }
     }

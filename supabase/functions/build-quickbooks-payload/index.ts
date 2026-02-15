@@ -10,7 +10,7 @@ Deno.serve(async (req: Request) => {
   const headers = getCorsHeaders(req);
 
   try {
-    await verifyApiKey(req);
+    const { customer_id } = await verifyApiKey(req);
 
     if (req.method !== "POST") {
       return new Response(JSON.stringify({ error: "Method not allowed" }), {
@@ -72,7 +72,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ quickbooks_payload: payload }),
+      JSON.stringify({ quickbooks_payload: payload, customer_id }),
       { status: 200, headers: { ...headers, "Content-Type": "application/json" } },
     );
   } catch (error) {

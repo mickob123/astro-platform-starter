@@ -1,0 +1,956 @@
+---
+export const prerender = false;
+import OnboardingLayout from '../../layouts/OnboardingLayout.astro';
+---
+
+<OnboardingLayout title="Setup" currentStep={0}>
+  <!-- Loading state -->
+  <div id="loading" class="flex justify-center py-12">
+    <span class="loading loading-spinner loading-lg"></span>
+  </div>
+
+  <!-- Error state -->
+  <div id="error-state" class="hidden">
+    <div class="alert alert-error">
+      <span id="error-text">Something went wrong.</span>
+    </div>
+    <button class="btn btn-primary btn-sm mt-4" onclick="window.location.reload()">Retry</button>
+  </div>
+
+  <!-- ========== STEP 1: Company Details ========== -->
+  <div id="step-company" class="hidden">
+    <div class="card bg-base-100 shadow-xl">
+      <div class="card-body">
+        <h2 class="card-title text-xl">Company Details</h2>
+        <p class="text-sm opacity-60 mb-4">Tell us about your company so we can configure invoicing correctly.</p>
+
+        <form id="company-form" class="flex flex-col gap-4">
+          <div class="form-control w-full">
+            <label class="label" for="company_name">
+              <span class="label-text font-medium">Company Name</span>
+            </label>
+            <input id="company_name" name="company_name" type="text" required
+              class="input input-bordered w-full" />
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="form-control w-full">
+              <label class="label" for="country">
+                <span class="label-text font-medium">Country</span>
+              </label>
+              <select id="country" name="country" class="select select-bordered w-full">
+                <option value="AU">Australia</option>
+                <option value="US">United States</option>
+                <option value="GB">United Kingdom</option>
+                <option value="NZ">New Zealand</option>
+                <option value="CA">Canada</option>
+                <option value="SG">Singapore</option>
+                <option value="IE">Ireland</option>
+              </select>
+            </div>
+
+            <div class="form-control w-full">
+              <label class="label" for="currency">
+                <span class="label-text font-medium">Currency</span>
+              </label>
+              <select id="currency" name="currency" class="select select-bordered w-full">
+                <option value="AUD">AUD — Australian Dollar</option>
+                <option value="USD">USD — US Dollar</option>
+                <option value="GBP">GBP — British Pound</option>
+                <option value="NZD">NZD — New Zealand Dollar</option>
+                <option value="CAD">CAD — Canadian Dollar</option>
+                <option value="SGD">SGD — Singapore Dollar</option>
+                <option value="EUR">EUR — Euro</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="form-control w-full">
+              <label class="label" for="tax_rate">
+                <span class="label-text font-medium">Tax Rate (%)</span>
+              </label>
+              <input id="tax_rate" name="tax_rate" type="number" step="0.01" min="0" max="100"
+                value="10" class="input input-bordered w-full" />
+              <label class="label">
+                <span class="label-text-alt opacity-50">e.g. 10 for Australian GST</span>
+              </label>
+            </div>
+
+            <div class="form-control w-full">
+              <label class="label" for="timezone">
+                <span class="label-text font-medium">Timezone</span>
+              </label>
+              <select id="timezone" name="timezone" class="select select-bordered w-full">
+                <option value="Australia/Melbourne">Australia/Melbourne (AEST)</option>
+                <option value="Australia/Sydney">Australia/Sydney (AEST)</option>
+                <option value="Australia/Perth">Australia/Perth (AWST)</option>
+                <option value="America/New_York">America/New_York (EST)</option>
+                <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
+                <option value="Europe/London">Europe/London (GMT)</option>
+                <option value="Pacific/Auckland">Pacific/Auckland (NZST)</option>
+                <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="card-actions justify-end mt-2">
+            <button type="submit" class="btn btn-primary" id="company-submit">
+              <span id="company-btn-text">Continue</span>
+              <span id="company-btn-loading" class="loading loading-spinner loading-sm hidden"></span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== STEP 2: Connect Email ========== -->
+  <div id="step-email" class="hidden">
+    <div class="card bg-base-100 shadow-xl">
+      <div class="card-body">
+        <h2 class="card-title text-xl">Connect Your Email</h2>
+        <p class="text-sm opacity-60 mb-4">Connect your Gmail account so we can automatically detect invoices you receive.</p>
+
+        <!-- Not connected state -->
+        <div id="email-connect-prompt">
+          <div class="flex flex-col items-center gap-4 py-6">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <button id="gmail-connect-btn" class="inline-flex items-center rounded px-3 py-2.5 border border-[#747775] bg-white hover:bg-[#F2F2F2] active:bg-[#E8E8E8] transition-colors cursor-pointer" style="font-family: 'Roboto', sans-serif; min-height: 40px;">
+              <div class="bg-white rounded-sm p-1.5 mr-3 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 48 48">
+                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                </svg>
+              </div>
+              <span class="text-sm font-medium text-[#1F1F1F] pr-2">Continue with Google</span>
+            </button>
+            <p class="text-xs opacity-40 max-w-sm text-center">
+              We only request read-only access to detect invoice emails.
+              We never send emails on your behalf.
+            </p>
+          </div>
+        </div>
+
+        <!-- Connecting state -->
+        <div id="email-connecting" class="hidden flex flex-col items-center gap-4 py-6">
+          <span class="loading loading-spinner loading-lg"></span>
+          <p class="text-sm">Connecting Gmail and setting up your workflow...</p>
+          <p class="text-xs opacity-50">This may take a few seconds.</p>
+        </div>
+
+        <!-- Connected state -->
+        <div id="email-connected" class="hidden">
+          <div class="alert alert-success">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            <div>
+              <p class="font-medium">Gmail connected!</p>
+              <p class="text-sm" id="connected-email"></p>
+            </div>
+          </div>
+          <div class="card-actions justify-between mt-4">
+            <button class="btn btn-ghost" id="email-back-btn">Back</button>
+            <button class="btn btn-primary" id="email-continue-btn">Continue</button>
+          </div>
+        </div>
+
+        <!-- Error state -->
+        <div id="email-error" class="hidden">
+          <div class="alert alert-error mb-4">
+            <span id="email-error-text">Failed to connect Gmail.</span>
+          </div>
+          <button class="btn btn-outline btn-sm" id="email-retry-btn">Try Again</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== STEP 3: Connect Accounting ========== -->
+  <div id="step-accounting" class="hidden">
+    <div class="card bg-base-100 shadow-xl">
+      <div class="card-body">
+        <h2 class="card-title text-xl">Connect Accounting Software</h2>
+        <p class="text-sm opacity-60 mb-4">Optionally connect your accounting software to auto-sync approved invoices.</p>
+
+        <!-- Not connected state -->
+        <div id="accounting-connect-prompt">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <!-- QuickBooks -->
+            <div class="card bg-base-200 border border-base-300">
+              <div class="card-body items-center text-center p-4 gap-3">
+                <img src="/images/logos/quickbooks.svg" alt="QuickBooks" class="h-8 object-contain" />
+                <p class="text-xs opacity-50">QuickBooks Online</p>
+                <button id="qb-connect-btn" class="btn btn-sm btn-primary">Connect</button>
+              </div>
+            </div>
+
+            <!-- Xero -->
+            <div class="card bg-base-200 border border-base-300 opacity-60">
+              <div class="card-body items-center text-center p-4 gap-3">
+                <img src="/images/logos/xero.png" alt="Xero" class="h-8 object-contain" />
+                <p class="text-xs opacity-50">Coming Soon</p>
+                <button class="btn btn-sm btn-disabled" disabled>Coming Soon</button>
+              </div>
+            </div>
+
+            <!-- MYOB -->
+            <div class="card bg-base-200 border border-base-300 opacity-60">
+              <div class="card-body items-center text-center p-4 gap-3">
+                <img src="/images/logos/myob.png" alt="MYOB" class="h-8 object-contain" />
+                <p class="text-xs opacity-50">Coming Soon</p>
+                <button class="btn btn-sm btn-disabled" disabled>Coming Soon</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Connecting state -->
+        <div id="accounting-connecting" class="hidden flex flex-col items-center gap-4 py-6">
+          <span class="loading loading-spinner loading-lg"></span>
+          <p class="text-sm">Connecting your accounting software...</p>
+        </div>
+
+        <!-- Connected state -->
+        <div id="accounting-connected" class="hidden">
+          <div class="alert alert-success mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            <div>
+              <p class="font-medium" id="accounting-provider-name">QuickBooks connected!</p>
+              <p class="text-sm" id="accounting-company-name"></p>
+            </div>
+          </div>
+
+          <!-- Expense Account Picker -->
+          <div id="expense-account-section">
+            <div id="expense-account-loading" class="flex items-center gap-2 py-3">
+              <span class="loading loading-spinner loading-sm"></span>
+              <span class="text-sm opacity-60">Loading expense accounts from QuickBooks...</span>
+            </div>
+
+            <div id="expense-account-picker" class="hidden">
+              <div class="form-control w-full">
+                <label class="label" for="expense_account">
+                  <span class="label-text font-medium">Default Expense Account</span>
+                </label>
+                <select id="expense_account" class="select select-bordered w-full">
+                  <option value="">Select an expense account...</option>
+                </select>
+                <label class="label">
+                  <span class="label-text-alt opacity-50">
+                    Approved invoices will be categorised under this account in QuickBooks.
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div id="expense-account-error" class="hidden">
+              <div class="alert alert-warning text-sm py-2">
+                <span>Could not load expense accounts. You can set this later in settings.</span>
+              </div>
+            </div>
+
+            <div id="expense-account-saved" class="hidden">
+              <div class="flex items-center gap-2 text-sm text-success py-1">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Expense account saved</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Error state -->
+        <div id="accounting-error" class="hidden">
+          <div class="alert alert-error mb-4">
+            <span id="accounting-error-text">Failed to connect.</span>
+          </div>
+        </div>
+
+        <div class="card-actions justify-between mt-4">
+          <div class="flex gap-2">
+            <button class="btn btn-ghost" id="accounting-back-btn">Back</button>
+            <button class="btn btn-ghost" id="accounting-skip-btn">Skip for now</button>
+          </div>
+          <button class="btn btn-primary hidden" id="accounting-continue-btn">Continue</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== STEP 4: Preferences ========== -->
+  <div id="step-preferences" class="hidden">
+    <div class="card bg-base-100 shadow-xl">
+      <div class="card-body">
+        <h2 class="card-title text-xl">Configure Preferences</h2>
+        <p class="text-sm opacity-60 mb-4">Set up auto-approval rules and notification preferences.</p>
+
+        <form id="preferences-form" class="flex flex-col gap-4">
+          <div class="form-control w-full">
+            <label class="label" for="auto_approve_threshold">
+              <span class="label-text font-medium">Auto-Approve Threshold</span>
+            </label>
+            <label class="input-group">
+              <span>$</span>
+              <input id="auto_approve_threshold" name="auto_approve_threshold"
+                type="number" step="0.01" min="0" value="0"
+                placeholder="0"
+                class="input input-bordered w-full" />
+            </label>
+            <label class="label">
+              <span class="label-text-alt opacity-50">Invoices under this amount will be auto-approved. Set to 0 to disable.</span>
+            </label>
+          </div>
+
+          <div class="divider text-xs opacity-50">Notifications</div>
+
+          <div class="form-control">
+            <label class="label cursor-pointer justify-start gap-3">
+              <input type="checkbox" id="notification_email" name="notification_email"
+                class="toggle toggle-primary" checked />
+              <div>
+                <span class="label-text font-medium">Email Notifications</span>
+                <p class="text-xs opacity-50">Get notified when new invoices are processed</p>
+              </div>
+            </label>
+          </div>
+
+          <div class="form-control">
+            <label class="label cursor-pointer justify-start gap-3">
+              <input type="checkbox" id="notification_slack" name="notification_slack"
+                class="toggle toggle-primary" />
+              <div>
+                <span class="label-text font-medium">Slack Notifications</span>
+                <p class="text-xs opacity-50">Send invoice alerts to a Slack channel</p>
+              </div>
+            </label>
+          </div>
+
+          <div id="slack-webhook-group" class="form-control w-full hidden">
+            <label class="label" for="slack_webhook_url">
+              <span class="label-text font-medium">Slack Webhook URL</span>
+            </label>
+            <input id="slack_webhook_url" name="slack_webhook_url" type="url"
+              placeholder="https://hooks.slack.com/services/..."
+              class="input input-bordered w-full" />
+            <label class="label">
+              <span class="label-text-alt opacity-50">
+                In your Slack app settings, go to <strong>Incoming Webhooks</strong> &rarr; <strong>Add New Webhook to Workspace</strong>, pick a channel, and paste the URL here.
+              </span>
+            </label>
+          </div>
+
+          <div class="card-actions justify-between mt-2">
+            <button type="button" class="btn btn-ghost" id="preferences-back-btn">Back</button>
+            <button type="submit" class="btn btn-primary" id="preferences-submit">
+              <span id="preferences-btn-text">Continue</span>
+              <span id="preferences-btn-loading" class="loading loading-spinner loading-sm hidden"></span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== STEP 5: Test Pipeline ========== -->
+  <div id="step-test" class="hidden">
+    <div class="card bg-base-100 shadow-xl">
+      <div class="card-body">
+        <h2 class="card-title text-xl">Test Your Pipeline</h2>
+        <p class="text-sm opacity-60 mb-4">Forward a sample invoice email to verify everything is working.</p>
+
+        <div id="test-waiting">
+          <div class="bg-base-200 rounded-lg p-6 text-center mb-4">
+            <p class="text-sm font-medium mb-2">Forward an invoice email from your connected Gmail.</p>
+            <p class="text-sm opacity-60">We'll automatically detect it and process it here.</p>
+          </div>
+
+          <div class="flex items-center gap-3 justify-center py-4">
+            <span class="loading loading-dots loading-md"></span>
+            <span class="text-sm opacity-60" id="test-status">Waiting for an invoice...</span>
+          </div>
+        </div>
+
+        <!-- Success state -->
+        <div id="test-success" class="hidden">
+          <div class="alert alert-success mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            <div>
+              <p class="font-medium">Invoice detected!</p>
+              <p class="text-sm" id="test-invoice-details"></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-actions justify-between mt-4">
+          <div class="flex gap-2">
+            <button class="btn btn-ghost" id="test-back-btn">Back</button>
+            <button class="btn btn-ghost" id="test-skip-btn">Skip Test</button>
+          </div>
+          <button class="btn btn-primary hidden" id="test-finish-btn">Go to Dashboard</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</OnboardingLayout>
+
+<script>
+  import { supabase, FUNCTIONS_URL } from '../../lib/supabase';
+
+  // --- State ---
+  let currentStep = 'company_details';
+  let customerData: Record<string, unknown> = {};
+
+  const STEPS = ['company_details', 'connect_email', 'connect_accounting', 'preferences', 'test_pipeline'];
+  const STEP_ELEMENTS = {
+    company_details: 'step-company',
+    connect_email: 'step-email',
+    connect_accounting: 'step-accounting',
+    preferences: 'step-preferences',
+    test_pipeline: 'step-test',
+  };
+
+  // --- Helpers ---
+  async function getAuthToken(): Promise<string> {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token || '';
+  }
+
+  async function apiCall(method: string, body?: Record<string, unknown>): Promise<Response> {
+    const token = await getAuthToken();
+    const opts: RequestInit = {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    };
+    if (body) opts.body = JSON.stringify(body);
+    return fetch(`${FUNCTIONS_URL}/onboarding-state`, opts);
+  }
+
+  function showStep(step: string) {
+    // Hide all step elements
+    Object.values(STEP_ELEMENTS).forEach(id => {
+      document.getElementById(id)?.classList.add('hidden');
+    });
+    document.getElementById('loading')?.classList.add('hidden');
+    document.getElementById('error-state')?.classList.add('hidden');
+
+    // Show the target step
+    const elementId = STEP_ELEMENTS[step as keyof typeof STEP_ELEMENTS];
+    if (elementId) {
+      document.getElementById(elementId)?.classList.remove('hidden');
+    }
+
+    // Update step indicator
+    const stepIdx = STEPS.indexOf(step);
+    document.querySelectorAll('#step-indicator .step').forEach((el, idx) => {
+      if (idx <= stepIdx) {
+        el.classList.add('step-primary');
+      } else {
+        el.classList.remove('step-primary');
+      }
+      // Update checkmark for completed steps
+      if (idx < stepIdx) {
+        el.setAttribute('data-content', '\u2713');
+      }
+    });
+
+    currentStep = step;
+  }
+
+  function showError(message: string) {
+    document.getElementById('loading')?.classList.add('hidden');
+    Object.values(STEP_ELEMENTS).forEach(id => {
+      document.getElementById(id)?.classList.add('hidden');
+    });
+    const errorState = document.getElementById('error-state');
+    const errorText = document.getElementById('error-text');
+    if (errorState && errorText) {
+      errorText.textContent = message;
+      errorState.classList.remove('hidden');
+    }
+  }
+
+  // --- Init: Fetch current state ---
+  async function init() {
+    try {
+      const response = await apiCall('GET');
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to load onboarding state');
+      }
+
+      const state = await response.json();
+      customerData = state.customer || {};
+
+      // If completed, go to dashboard
+      if (state.completed) {
+        window.location.href = '/dashboard';
+        return;
+      }
+
+      // Pre-fill company details if available
+      if (customerData.name) {
+        (document.getElementById('company_name') as HTMLInputElement).value = customerData.name as string;
+      }
+      if (customerData.country) {
+        (document.getElementById('country') as HTMLSelectElement).value = customerData.country as string;
+      }
+      if (customerData.currency) {
+        (document.getElementById('currency') as HTMLSelectElement).value = customerData.currency as string;
+      }
+      if (customerData.tax_rate) {
+        (document.getElementById('tax_rate') as HTMLInputElement).value = String(customerData.tax_rate);
+      }
+
+      // If email is already connected, show the connected state
+      if (state.email_connection?.connected) {
+        document.getElementById('email-connect-prompt')?.classList.add('hidden');
+        document.getElementById('email-connected')?.classList.remove('hidden');
+        const emailEl = document.getElementById('connected-email');
+        if (emailEl) emailEl.textContent = state.email_connection.email;
+      }
+
+      // If accounting is already connected, show connected state
+      if (state.accounting_connection?.connected) {
+        document.getElementById('accounting-connect-prompt')?.classList.add('hidden');
+        document.getElementById('accounting-connected')?.classList.remove('hidden');
+        const providerEl = document.getElementById('accounting-provider-name');
+        const companyEl = document.getElementById('accounting-company-name');
+        if (providerEl) providerEl.textContent = `${state.accounting_connection.provider} connected!`;
+        if (companyEl) companyEl.textContent = state.accounting_connection.company || '';
+        document.getElementById('accounting-skip-btn')?.classList.add('hidden');
+        document.getElementById('accounting-continue-btn')?.classList.remove('hidden');
+
+        // Load expense accounts if on the accounting step
+        if (state.current_step === 'connect_accounting') {
+          loadExpenseAccounts();
+        }
+      }
+
+      // Show the current step
+      showStep(state.current_step || 'company_details');
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to load');
+    }
+  }
+
+  // Handle OAuth return (URL has ?code=...&state=...)
+  function handleOAuthReturn() {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const state = params.get('state');
+    const realmId = params.get('realmId');
+
+    if (code && state === 'gmail_connect') {
+      // Clear URL params
+      window.history.replaceState({}, '', '/onboarding');
+      handleGmailCallback(code);
+      return true;
+    }
+
+    if (code && state === 'qb_connect') {
+      window.history.replaceState({}, '', '/onboarding');
+      handleQuickBooksCallback(code, realmId || '');
+      return true;
+    }
+
+    return false;
+  }
+
+  async function handleGmailCallback(code: string) {
+    showStep('connect_email');
+    document.getElementById('email-connect-prompt')?.classList.add('hidden');
+    document.getElementById('email-connecting')?.classList.remove('hidden');
+
+    try {
+      const response = await apiCall('PUT', {
+        step: 'connect_email',
+        data: {
+          gmail_auth_code: code,
+          redirect_uri: `${window.location.origin}/onboarding`,
+        },
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to connect Gmail');
+      }
+
+      const result = await response.json();
+      document.getElementById('email-connecting')?.classList.add('hidden');
+      document.getElementById('email-connected')?.classList.remove('hidden');
+      const emailEl = document.getElementById('connected-email');
+      if (emailEl) emailEl.textContent = result.email || 'Connected';
+    } catch (err) {
+      document.getElementById('email-connecting')?.classList.add('hidden');
+      document.getElementById('email-error')?.classList.remove('hidden');
+      const errorEl = document.getElementById('email-error-text');
+      if (errorEl) errorEl.textContent = err instanceof Error ? err.message : 'Connection failed';
+    }
+  }
+
+  async function handleQuickBooksCallback(code: string, realmId: string) {
+    showStep('connect_accounting');
+    document.getElementById('accounting-connect-prompt')?.classList.add('hidden');
+    document.getElementById('accounting-connecting')?.classList.remove('hidden');
+
+    try {
+      const response = await apiCall('PUT', {
+        step: 'connect_accounting',
+        data: {
+          provider: 'quickbooks',
+          auth_code: code,
+          redirect_uri: `${window.location.origin}/onboarding`,
+          realm_id: realmId,
+        },
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to connect QuickBooks');
+      }
+
+      const result = await response.json();
+      document.getElementById('accounting-connecting')?.classList.add('hidden');
+      document.getElementById('accounting-connected')?.classList.remove('hidden');
+      const companyEl = document.getElementById('accounting-company-name');
+      if (companyEl) companyEl.textContent = result.company_name || '';
+      document.getElementById('accounting-skip-btn')?.classList.add('hidden');
+      document.getElementById('accounting-continue-btn')?.classList.remove('hidden');
+
+      // Load expense accounts from QuickBooks
+      loadExpenseAccounts();
+    } catch (err) {
+      document.getElementById('accounting-connecting')?.classList.add('hidden');
+      document.getElementById('accounting-error')?.classList.remove('hidden');
+      const errorEl = document.getElementById('accounting-error-text');
+      if (errorEl) errorEl.textContent = err instanceof Error ? err.message : 'Connection failed';
+    }
+  }
+
+  // --- Step 1: Company Details ---
+  document.getElementById('company-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('company-submit') as HTMLButtonElement;
+    const btnText = document.getElementById('company-btn-text')!;
+    const btnLoading = document.getElementById('company-btn-loading')!;
+
+    btn.disabled = true;
+    btnText.textContent = 'Saving...';
+    btnLoading.classList.remove('hidden');
+
+    try {
+      const response = await apiCall('PUT', {
+        step: 'company_details',
+        data: {
+          company_name: (document.getElementById('company_name') as HTMLInputElement).value,
+          country: (document.getElementById('country') as HTMLSelectElement).value,
+          currency: (document.getElementById('currency') as HTMLSelectElement).value,
+          tax_rate: parseFloat((document.getElementById('tax_rate') as HTMLInputElement).value) || 10,
+          timezone: (document.getElementById('timezone') as HTMLSelectElement).value,
+        },
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to save');
+      }
+
+      const result = await response.json();
+      showStep(result.next_step);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to save company details');
+    } finally {
+      btn.disabled = false;
+      btnText.textContent = 'Continue';
+      btnLoading.classList.add('hidden');
+    }
+  });
+
+  // --- Step 2: Connect Gmail ---
+  // The Google Client ID needs to be available client-side for the OAuth redirect
+  // We'll fetch it from a meta tag or hardcode it
+  const GOOGLE_CLIENT_ID = (document.querySelector('meta[name="google-client-id"]') as HTMLMetaElement)?.content || '';
+
+  document.getElementById('gmail-connect-btn')?.addEventListener('click', () => {
+    if (!GOOGLE_CLIENT_ID) {
+      alert('Google Client ID not configured. Please contact support.');
+      return;
+    }
+
+    const params = new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID,
+      redirect_uri: `${window.location.origin}/onboarding`,
+      response_type: 'code',
+      scope: 'https://www.googleapis.com/auth/gmail.readonly',
+      access_type: 'offline',
+      prompt: 'consent',
+      state: 'gmail_connect',
+    });
+
+    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  });
+
+  document.getElementById('email-back-btn')?.addEventListener('click', () => {
+    showStep('company_details');
+  });
+
+  document.getElementById('email-continue-btn')?.addEventListener('click', () => {
+    showStep('connect_accounting');
+  });
+
+  document.getElementById('email-retry-btn')?.addEventListener('click', () => {
+    document.getElementById('email-error')?.classList.add('hidden');
+    document.getElementById('email-connect-prompt')?.classList.remove('hidden');
+  });
+
+  // --- Step 3: Connect Accounting ---
+  const QUICKBOOKS_CLIENT_ID = (document.querySelector('meta[name="quickbooks-client-id"]') as HTMLMetaElement)?.content || '';
+
+  document.getElementById('qb-connect-btn')?.addEventListener('click', () => {
+    if (!QUICKBOOKS_CLIENT_ID) {
+      alert('QuickBooks Client ID not configured. Please contact support.');
+      return;
+    }
+
+    const params = new URLSearchParams({
+      client_id: QUICKBOOKS_CLIENT_ID,
+      redirect_uri: `${window.location.origin}/onboarding`,
+      response_type: 'code',
+      scope: 'com.intuit.quickbooks.accounting',
+      state: 'qb_connect',
+    });
+
+    window.location.href = `https://appcenter.intuit.com/connect/oauth2?${params.toString()}`;
+  });
+
+  // --- Expense Account Picker ---
+  async function loadExpenseAccounts() {
+    const loadingEl = document.getElementById('expense-account-loading');
+    const pickerEl = document.getElementById('expense-account-picker');
+    const errorEl = document.getElementById('expense-account-error');
+    const selectEl = document.getElementById('expense_account') as HTMLSelectElement;
+
+    try {
+      const response = await apiCall('PUT', { step: 'fetch_expense_accounts' });
+      if (!response.ok) throw new Error('Failed to fetch accounts');
+
+      const result = await response.json();
+      const accounts = result.accounts || [];
+
+      if (accounts.length === 0) {
+        loadingEl?.classList.add('hidden');
+        errorEl?.classList.remove('hidden');
+        return;
+      }
+
+      // Populate the dropdown
+      accounts.forEach((account: { id: string; name: string; full_name: string; type: string; sub_type: string }) => {
+        const option = document.createElement('option');
+        option.value = account.id;
+        option.textContent = account.full_name || account.name;
+        if (account.type === 'Cost of Goods Sold') {
+          option.textContent += ' (COGS)';
+        }
+        selectEl.appendChild(option);
+      });
+
+      // If a default is already set, select it
+      if (result.current_default) {
+        selectEl.value = result.current_default;
+      }
+
+      loadingEl?.classList.add('hidden');
+      pickerEl?.classList.remove('hidden');
+    } catch (err) {
+      console.error('Failed to load expense accounts:', err);
+      loadingEl?.classList.add('hidden');
+      errorEl?.classList.remove('hidden');
+    }
+  }
+
+  // Save expense account selection on change
+  document.getElementById('expense_account')?.addEventListener('change', async (e) => {
+    const selectEl = e.target as HTMLSelectElement;
+    const accountId = selectEl.value;
+    const savedEl = document.getElementById('expense-account-saved');
+
+    if (!accountId) {
+      savedEl?.classList.add('hidden');
+      return;
+    }
+
+    try {
+      const response = await apiCall('PUT', {
+        step: 'set_expense_account',
+        data: { account_id: accountId },
+      });
+      if (response.ok) {
+        savedEl?.classList.remove('hidden');
+        setTimeout(() => savedEl?.classList.add('hidden'), 3000);
+      }
+    } catch (err) {
+      console.error('Failed to save expense account:', err);
+    }
+  });
+
+  document.getElementById('accounting-back-btn')?.addEventListener('click', () => {
+    showStep('connect_email');
+  });
+
+  document.getElementById('accounting-skip-btn')?.addEventListener('click', async () => {
+    try {
+      const response = await apiCall('PUT', { step: 'skip_accounting' });
+      if (!response.ok) throw new Error('Failed to skip');
+      const result = await response.json();
+      showStep(result.next_step);
+    } catch (err) {
+      alert('Failed to skip. Please try again.');
+    }
+  });
+
+  document.getElementById('accounting-continue-btn')?.addEventListener('click', () => {
+    showStep('preferences');
+  });
+
+  // --- Step 4: Preferences ---
+  document.getElementById('preferences-back-btn')?.addEventListener('click', () => {
+    showStep('connect_accounting');
+  });
+
+  const slackToggle = document.getElementById('notification_slack') as HTMLInputElement;
+  slackToggle?.addEventListener('change', () => {
+    document.getElementById('slack-webhook-group')?.classList.toggle('hidden', !slackToggle.checked);
+  });
+
+  document.getElementById('preferences-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('preferences-submit') as HTMLButtonElement;
+    const btnText = document.getElementById('preferences-btn-text')!;
+    const btnLoading = document.getElementById('preferences-btn-loading')!;
+
+    btn.disabled = true;
+    btnText.textContent = 'Saving...';
+    btnLoading.classList.remove('hidden');
+
+    try {
+      const response = await apiCall('PUT', {
+        step: 'preferences',
+        data: {
+          auto_approve_threshold: parseFloat((document.getElementById('auto_approve_threshold') as HTMLInputElement).value) || 0,
+          notification_email: (document.getElementById('notification_email') as HTMLInputElement).checked,
+          notification_slack: (document.getElementById('notification_slack') as HTMLInputElement).checked,
+          slack_webhook_url: (document.getElementById('slack_webhook_url') as HTMLInputElement).value || null,
+        },
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to save');
+      }
+
+      const result = await response.json();
+      showStep(result.next_step);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to save preferences');
+    } finally {
+      btn.disabled = false;
+      btnText.textContent = 'Continue';
+      btnLoading.classList.add('hidden');
+    }
+  });
+
+  // --- Step 5: Test Pipeline ---
+  let testPollInterval: ReturnType<typeof setInterval> | null = null;
+  let initialInvoiceCount = 0;
+
+  async function startTestPolling() {
+    // Check immediately — during onboarding, any invoice means the pipeline works
+    async function checkForInvoices() {
+      try {
+        const response = await apiCall('PUT', { step: 'check_invoices' });
+        if (!response.ok) return false;
+
+        const data = await response.json();
+        const count = data.total_invoices || 0;
+
+        if (count > 0) {
+          // Invoice found!
+          if (testPollInterval) clearInterval(testPollInterval);
+
+          document.getElementById('test-waiting')?.classList.add('hidden');
+          document.getElementById('test-success')?.classList.remove('hidden');
+          document.getElementById('test-finish-btn')?.classList.remove('hidden');
+
+          const detailsEl = document.getElementById('test-invoice-details');
+          if (detailsEl && data.latest) {
+            const vendor = data.latest.vendor || 'Unknown vendor';
+            const amount = data.latest.total ? `$${data.latest.total.toFixed(2)}` : '';
+            detailsEl.textContent = `${vendor} ${amount}`.trim();
+          }
+          return true;
+        }
+      } catch {}
+      return false;
+    }
+
+    // Check right away
+    const found = await checkForInvoices();
+    if (found) return;
+
+    // Poll every 5 seconds
+    testPollInterval = setInterval(checkForInvoices, 5000);
+  }
+
+  // Watch for step-test becoming visible to start polling
+  const testObserver = new MutationObserver(() => {
+    const testEl = document.getElementById('step-test');
+    if (testEl && !testEl.classList.contains('hidden')) {
+      startTestPolling();
+      testObserver.disconnect();
+    }
+  });
+  testObserver.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
+
+  document.getElementById('test-back-btn')?.addEventListener('click', () => {
+    if (testPollInterval) clearInterval(testPollInterval);
+    showStep('preferences');
+  });
+
+  document.getElementById('test-skip-btn')?.addEventListener('click', async () => {
+    if (testPollInterval) clearInterval(testPollInterval);
+    try {
+      await apiCall('PUT', { step: 'test_complete' });
+    } catch {}
+    window.location.href = '/dashboard';
+  });
+
+  document.getElementById('test-finish-btn')?.addEventListener('click', async () => {
+    if (testPollInterval) clearInterval(testPollInterval);
+    try {
+      await apiCall('PUT', { step: 'test_complete' });
+    } catch {}
+    window.location.href = '/dashboard';
+  });
+
+  // --- Boot ---
+  if (!handleOAuthReturn()) {
+    init();
+  } else {
+    // For OAuth returns, still load state in background
+    init();
+  }
+</script>
