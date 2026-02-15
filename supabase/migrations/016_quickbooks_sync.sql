@@ -1,0 +1,1 @@
+-- Stub: applied remotely. Adds QuickBooks sync columns and vendor external_accounting_id.

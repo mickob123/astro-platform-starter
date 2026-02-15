@@ -21,7 +21,7 @@ import '@fontsource/inter/800.css';
       import { supabase } from '../lib/supabase';
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        window.location.href = '/dashboard';
+        window.location.href = '/';
       } else {
         // Show the login form once we confirm user is not authenticated
         document.getElementById('login-card')?.classList.remove('opacity-0');
@@ -95,10 +95,20 @@ import '@fontsource/inter/800.css';
         </div>
       </div>
 
-      <!-- Footer text -->
-      <p class="text-center text-xs text-base-content/40 mt-6">
-        Protected area. Authorized users only.
+      <!-- Create account link -->
+      <p class="text-center text-sm mt-6">
+        Don't have an account?
+        <a href="/signup" class="link link-primary font-medium">Create one</a>
       </p>
+
+      <footer class="text-center text-xs text-base-content/40 mt-8 space-x-2">
+        <span>&copy; 2026 Agentive Group Co Pty Ltd.</span>
+        <a href="/terms" class="link link-hover">Terms</a>
+        <span>&middot;</span>
+        <a href="/privacy" class="link link-hover">Privacy</a>
+        <span>&middot;</span>
+        <a href="mailto:invoiceautomation@agentivegroup.ai" class="link link-hover">Contact</a>
+      </footer>
     </div>
 
     <!-- Login handler -->
@@ -156,8 +166,8 @@ import '@fontsource/inter/800.css';
           return;
         }
 
-        // Successful login - redirect to dashboard
-        window.location.href = '/dashboard';
+        // Successful login - route via index (checks onboarding state)
+        window.location.href = '/';
       });
     </script>
   </body>

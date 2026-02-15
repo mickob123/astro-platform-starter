@@ -20,7 +20,7 @@ export function getCorsHeaders(req: Request): Record<string, string> {
     "Access-Control-Allow-Origin": isAllowed ? origin : "",
     "Access-Control-Allow-Headers":
       "authorization, x-client-info, apikey, content-type, x-api-key",
-    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+    "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE, OPTIONS",
     "Access-Control-Max-Age": "86400",
   };
 }

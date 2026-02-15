@@ -91,16 +91,28 @@ echo "[20/21] Deploying upload-invoice-pdf (API key auth)..."
 supabase functions deploy upload-invoice-pdf --no-verify-jwt
 
 # --- Webhook functions: signature-based auth ---
-echo "[21/21] Deploying email-intake (webhook auth)..."
+echo "[21/23] Deploying email-intake (webhook auth)..."
 supabase functions deploy email-intake --no-verify-jwt
 
+# --- Onboarding functions ---
+echo "[22/23] Deploying onboarding-register (no auth - public signup)..."
+supabase functions deploy onboarding-register --no-verify-jwt
+
+echo "[23/23] Deploying onboarding-state (JWT auth)..."
+supabase functions deploy onboarding-state --no-verify-jwt
+
 echo ""
-echo "=== All 21 functions deployed ==="
+echo "=== All 23 functions deployed ==="
 echo ""
 echo "IMPORTANT: Make sure you have set these secrets:"
 echo "  supabase secrets set ALLOWED_ORIGINS=\"https://your-admin.netlify.app,https://n8n.agentivegroup.ai\""
 echo "  supabase secrets set OPENAI_API_KEY=\"sk-...\""
 echo "  supabase secrets set SLACK_WEBHOOK_URL=\"https://hooks.slack.com/services/...\"  (optional)"
+echo "  supabase secrets set GOOGLE_CLIENT_ID=\"...\"  (for Gmail OAuth)"
+echo "  supabase secrets set GOOGLE_CLIENT_SECRET=\"...\"  (for Gmail OAuth)"
+echo "  supabase secrets set QUICKBOOKS_CLIENT_ID=\"...\"  (for QuickBooks OAuth)"
+echo "  supabase secrets set QUICKBOOKS_CLIENT_SECRET=\"...\"  (for QuickBooks OAuth)"
+echo "  supabase secrets set QUICKBOOKS_API_BASE=\"https://sandbox-quickbooks.api.intuit.com/v3/company\"  (sandbox; production: https://quickbooks.api.intuit.com/v3/company)"
 echo ""
 echo "To verify, run:"
 echo "  supabase functions list"

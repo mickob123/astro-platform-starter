@@ -290,7 +290,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
 </style>
 
 <script>
-  import { supabase } from '../lib/supabase';
+  import { supabase, getAccessToken } from '../lib/supabase';
 
   // ─── Constants & Config ───────────────────────────────────────────
   const FUNCTIONS_URL = 'https://tcgptxbqqyxmvsaqiblc.supabase.co/functions/v1';
@@ -400,10 +400,22 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     return `<span class="badge badge-sm ${info.class} gap-1">${iconHtml}${info.label}</span>`;
   }
 
+  function getSyncBadge(syncStatus: string | null): string {
+    if (!syncStatus) return '';
+    const map: Record<string, { class: string; label: string; icon: string }> = {
+      pending: { class: 'badge-ghost', label: 'Syncing', icon: '\u21BB' },
+      synced:  { class: 'badge-info badge-outline', label: 'QB', icon: '\u2713' },
+      failed:  { class: 'badge-error badge-outline', label: 'Sync Failed', icon: '\u26A0' },
+      skipped: { class: 'badge-ghost badge-outline', label: 'No QB', icon: '\u2014' },
+    };
+    const info = map[syncStatus];
+    if (!info) return '';
+    return `<span class="badge badge-sm ${info.class} gap-1 ml-1" title="QuickBooks: ${info.label}">${info.icon} ${info.label}</span>`;
+  }
+
   // ─── Auth ──────────────────────────────────────────────────────────
   async function getAuthToken(): Promise<string | null> {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.access_token ?? null;
+    return await getAccessToken();
   }
 
   // ─── API Fetch ────────────────────────────────────────────────────
@@ -632,7 +644,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
         <td class="font-mono font-medium">${formatCurrency(inv.total)}</td>
         <td class="hidden sm:table-cell text-sm">${formatDate(inv.invoice_date)}</td>
         <td class="hidden md:table-cell text-sm">${formatDate(inv.due_date)}</td>
-        <td>${getStatusBadge(inv.status || 'pending')}</td>
+        <td><div class="flex flex-wrap items-center gap-0.5">${getStatusBadge(inv.status || 'pending')}${inv.status === 'approved' ? getSyncBadge(inv.sync_status) : ''}</div></td>
         <td class="hidden lg:table-cell"><span class="${conf.class}">${conf.text}</span></td>
         ${actionsHtml}
       </tr>

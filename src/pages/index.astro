@@ -1,6 +1,64 @@
 ---
 export const prerender = false;
 
-// Redirect root to dashboard (which handles auth check itself)
-return Astro.redirect('/dashboard');
+import '../styles/globals.css';
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/800.css';
 ---
+
+<!doctype html>
+<html lang="en" data-theme="lofi">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Invoice Dashboard</title>
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body class="min-h-screen bg-base-200 flex items-center justify-center">
+    <span class="loading loading-spinner loading-lg"></span>
+
+    <script>
+      import { supabase, FUNCTIONS_URL, getAccessToken } from '../lib/supabase';
+
+      async function route() {
+        const token = await getAccessToken();
+        if (!token) {
+          window.location.href = '/login';
+          return;
+        }
+
+        // Check onboarding status via edge function (bypasses RLS)
+        try {
+          const res = await fetch(`${FUNCTIONS_URL}/onboarding-state`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data.completed || data.current_step === 'completed') {
+              window.location.href = '/dashboard';
+              return;
+            }
+          }
+        } catch {
+          // If the check fails, fall through to onboarding
+        }
+
+        // If onboarding not complete or check failed, go to onboarding
+        const { data: { session } } = await supabase.auth.getSession();
+        const customerId = session?.user?.app_metadata?.customer_id;
+        if (customerId) {
+          window.location.href = '/onboarding';
+        } else {
+          // No customer_id means they need to register properly
+          window.location.href = '/signup';
+        }
+      }
+
+      route();
+    </script>
+  </body>
+</html>

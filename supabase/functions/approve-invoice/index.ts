@@ -324,8 +324,51 @@ Deno.serve(async (req: Request) => {
       input: { action, admin_user_id: user.id, admin_email: user.email },
     });
 
+    // --- Auto-sync to QuickBooks on approval ---
+    let syncResult: { synced?: boolean; error?: string } = {};
+    if (action === "approve") {
+      try {
+        // Check if customer has an active accounting connection
+        const { data: conn } = await supabase
+          .from("accounting_connections")
+          .select("id, provider")
+          .eq("customer_id", existing.customer_id)
+          .eq("is_active", true)
+          .single();
+
+        if (conn) {
+          // Call the sync function internally
+          const syncUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/admin-accounting-sync`;
+          const syncRes = await fetch(syncUrl, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${req.headers.get("Authorization")?.replace("Bearer ", "") ?? ""}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              action: "sync",
+              invoice_ids: [invoice_id],
+            }),
+          });
+
+          if (syncRes.ok) {
+            const syncData = await syncRes.json();
+            syncResult = { synced: true, ...syncData };
+            console.log(`Auto-synced invoice ${invoice_id} to ${conn.provider}`);
+          } else {
+            const errText = await syncRes.text();
+            syncResult = { synced: false, error: `Sync returned ${syncRes.status}` };
+            console.error(`Auto-sync failed for ${invoice_id}:`, errText);
+          }
+        }
+      } catch (syncErr) {
+        syncResult = { synced: false, error: "Sync call failed" };
+        console.error("Auto-sync error:", syncErr);
+      }
+    }
+
     return new Response(
-      JSON.stringify({ invoice: updated }),
+      JSON.stringify({ invoice: updated, sync: syncResult }),
       { status: 200, headers: { ...headers, "Content-Type": "application/json" } },
     );
   } catch (error) {

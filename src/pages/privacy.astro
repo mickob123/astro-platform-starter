@@ -1,0 +1,246 @@
+---
+export const prerender = false;
+import '../styles/globals.css';
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/800.css';
+---
+
+<!doctype html>
+<html lang="en" data-theme="lofi">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Privacy Policy | Agentive Group</title>
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body class="min-h-screen bg-base-200">
+    <div class="navbar bg-base-100 shadow-md px-4">
+      <div class="flex-1">
+        <a href="/" class="text-lg sm:text-xl font-bold text-base-content no-underline">
+          Agentive Group
+        </a>
+      </div>
+      <div class="flex-none gap-2">
+        <a href="/terms" class="btn btn-ghost btn-sm">Terms of Use</a>
+        <a href="/login" class="btn btn-ghost btn-sm">Login</a>
+      </div>
+    </div>
+
+    <main class="max-w-3xl mx-auto px-4 py-8 sm:py-12">
+      <div class="card bg-base-100 shadow-xl">
+        <div class="card-body prose prose-sm max-w-none">
+          <h1 class="text-2xl font-bold">Privacy Policy</h1>
+          <p class="text-sm opacity-60">Last updated: 14 February 2026</p>
+
+          <p>
+            Agentive Group Co Pty Ltd (ABN 54 695 269 222) (<strong>"Agentive Group"</strong>,
+            <strong>"we"</strong>, <strong>"us"</strong>, <strong>"our"</strong>) is committed to
+            protecting your privacy in accordance with the <em>Privacy Act 1988</em> (Cth) and the
+            Australian Privacy Principles (<strong>"APPs"</strong>). This Privacy Policy describes how
+            we collect, use, disclose, and store personal information through the Agentive Invoice
+            Dashboard platform (<strong>"Service"</strong>).
+          </p>
+
+          <h2>1. Information We Collect</h2>
+
+          <h3>1.1 Information You Provide</h3>
+          <ul>
+            <li>
+              <strong>Account information:</strong> Name, email address, company name, and business
+              details when you register for an account.
+            </li>
+            <li>
+              <strong>Invoice data:</strong> Invoices, vendor information, financial amounts, line items,
+              and related business documents you upload or process through the Service.
+            </li>
+            <li>
+              <strong>Communication preferences:</strong> Notification settings, Slack webhook URLs,
+              and other configuration preferences.
+            </li>
+          </ul>
+
+          <h3>1.2 Information from Third-Party Services</h3>
+          <p>When you connect third-party services, we may collect:</p>
+          <ul>
+            <li>
+              <strong>Google (Gmail):</strong> Email metadata and invoice attachments from your connected
+              Gmail account, accessed via OAuth with read-only permissions. We only access emails relevant
+              to invoice processing.
+            </li>
+            <li>
+              <strong>QuickBooks Online:</strong> Company information, chart of accounts, vendor records,
+              and bill data, accessed via OAuth for the purpose of syncing approved invoices.
+            </li>
+            <li>
+              <strong>Slack:</strong> We send notifications to your designated Slack channel via incoming
+              webhook. We do not read or access your Slack messages or workspace data.
+            </li>
+          </ul>
+
+          <h3>1.3 Information Collected Automatically</h3>
+          <ul>
+            <li>
+              <strong>Usage data:</strong> Pages visited, features used, timestamps, and general interaction
+              patterns with the Service.
+            </li>
+            <li>
+              <strong>Technical data:</strong> Browser type, device information, IP address, and similar
+              technical information necessary for the operation of the Service.
+            </li>
+          </ul>
+
+          <h2>2. How We Use Your Information</h2>
+          <p>We use your personal information to:</p>
+          <ul>
+            <li>Provide, operate, and maintain the Service</li>
+            <li>Process and classify invoices using AI-assisted extraction and validation</li>
+            <li>Sync approved invoices with your connected accounting software</li>
+            <li>Send notifications about invoice status via email or Slack</li>
+            <li>Improve the accuracy and performance of the Service</li>
+            <li>Respond to your enquiries and provide customer support</li>
+            <li>Comply with legal obligations and enforce our terms</li>
+          </ul>
+
+          <h2>3. AI Processing</h2>
+          <p>
+            The Service uses artificial intelligence (OpenAI's GPT-4o) to classify, extract, and validate
+            invoice data. When processing your invoices:
+          </p>
+          <ul>
+            <li>Invoice content (email text, PDF documents) is sent to OpenAI's API for processing</li>
+            <li>
+              We use OpenAI's API with data processing agreements in place. As per OpenAI's API data usage
+              policy, data sent via the API is not used to train their models
+            </li>
+            <li>Extracted data is stored in our secure database for your access and review</li>
+          </ul>
+
+          <h2>4. Disclosure of Information</h2>
+          <p>We may disclose your personal information to:</p>
+          <ul>
+            <li>
+              <strong>Service providers:</strong> Third-party providers who assist in operating the Service,
+              including cloud hosting (Supabase, Netlify), AI processing (OpenAI), and workflow automation
+              (n8n). These providers are bound by confidentiality obligations.
+            </li>
+            <li>
+              <strong>Connected services:</strong> Third-party platforms you choose to integrate
+              (Google, Intuit QuickBooks, Slack) as authorised by you.
+            </li>
+            <li>
+              <strong>Legal requirements:</strong> When required by law, regulation, or legal process, or
+              to protect the rights, property, or safety of Agentive Group or others.
+            </li>
+          </ul>
+          <p>
+            We do not sell, rent, or trade your personal information to third parties for marketing purposes.
+          </p>
+
+          <h2>5. Data Storage and Security</h2>
+          <p>
+            Your data is stored on servers operated by Supabase (cloud infrastructure). While we endeavour
+            to use service providers with data centres in Australia where available, some data may be
+            processed or stored in overseas locations, including the United States, in connection with
+            third-party service providers (e.g., OpenAI, Netlify).
+          </p>
+          <p>
+            In accordance with APP 8, where your data is disclosed to overseas recipients, we take
+            reasonable steps to ensure that the overseas recipient handles your information in accordance
+            with the APPs.
+          </p>
+          <p>We protect your information using:</p>
+          <ul>
+            <li>Encryption in transit (TLS/SSL) and at rest</li>
+            <li>Row-level security and tenant isolation in our database</li>
+            <li>OAuth 2.0 for third-party service authentication (no passwords stored)</li>
+            <li>API key hashing (SHA-256) for external integrations</li>
+            <li>Role-based access controls</li>
+          </ul>
+
+          <h2>6. Data Retention</h2>
+          <p>
+            We retain your personal information for as long as your account is active or as needed to
+            provide the Service. Upon account termination:
+          </p>
+          <ul>
+            <li>We will make your data available for export for 30 days</li>
+            <li>After the export period, we will securely delete your data within 90 days</li>
+            <li>
+              We may retain certain data as required by law or for legitimate business purposes
+              (e.g., audit logs, legal compliance)
+            </li>
+          </ul>
+
+          <h2>7. Your Rights Under the Privacy Act</h2>
+          <p>Under the APPs, you have the right to:</p>
+          <ul>
+            <li>
+              <strong>Access:</strong> Request access to the personal information we hold about you
+              (APP 12)
+            </li>
+            <li>
+              <strong>Correction:</strong> Request correction of any inaccurate, out-of-date, incomplete,
+              irrelevant, or misleading personal information (APP 13)
+            </li>
+            <li>
+              <strong>Complaint:</strong> Lodge a complaint about our handling of your personal information
+            </li>
+          </ul>
+          <p>
+            To exercise any of these rights, contact us using the details in Section 11 below. We will
+            respond to access and correction requests within 30 days.
+          </p>
+
+          <h2>8. Cookies and Tracking</h2>
+          <p>
+            The Service uses essential cookies and local storage for authentication and session management.
+            We do not use third-party tracking cookies or advertising trackers. Authentication tokens are
+            stored securely in your browser's local storage and are required for the Service to function.
+          </p>
+
+          <h2>9. Children's Privacy</h2>
+          <p>
+            The Service is designed for business use and is not intended for individuals under the age of 18.
+            We do not knowingly collect personal information from children. If we become aware that we have
+            collected personal information from a child, we will take steps to delete it promptly.
+          </p>
+
+          <h2>10. Changes to This Policy</h2>
+          <p>
+            We may update this Privacy Policy from time to time to reflect changes in our practices or
+            applicable law. We will notify you of material changes by email or through the Service. The
+            "Last updated" date at the top of this page indicates when the policy was last revised.
+          </p>
+
+          <h2>11. Contact Us and Complaints</h2>
+          <p>
+            If you have any questions, concerns, or complaints about this Privacy Policy or our handling
+            of your personal information, please contact us at:
+          </p>
+          <p>
+            <strong>Privacy Officer</strong><br />
+            Agentive Group Co Pty Ltd<br />
+            Email: <a href="mailto:privacy@agentivegroup.ai">privacy@agentivegroup.ai</a><br />
+            Website: <a href="https://agentivegroup.ai">https://agentivegroup.ai</a>
+          </p>
+          <p>
+            We will acknowledge your complaint within 7 days and aim to resolve it within 30 days.
+          </p>
+          <p>
+            If you are not satisfied with our response, you may lodge a complaint with the
+            <strong>Office of the Australian Information Commissioner (OAIC)</strong>:
+          </p>
+          <p>
+            Website: <a href="https://www.oaic.gov.au" target="_blank" rel="noopener noreferrer">www.oaic.gov.au</a><br />
+            Phone: 1300 363 992<br />
+            Post: GPO Box 5218, Sydney NSW 2001
+          </p>
+        </div>
+      </div>
+    </main>
+
+    <footer class="text-center text-xs text-base-content/40 py-6">
+      &copy; 2026 Agentive Group Co Pty Ltd. All rights reserved.
+    </footer>
+  </body>
+</html>

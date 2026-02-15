@@ -245,6 +245,31 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
           </div>
         </div>
 
+        <!-- QuickBooks Sync Status Card -->
+        <div id="sync-status-card" class="card bg-base-100 shadow-sm hidden">
+          <div class="card-body">
+            <h2 class="card-title text-lg mb-4">
+              <img src="/images/logos/quickbooks.svg" alt="QB" class="h-5 w-5" />
+              QuickBooks Sync
+            </h2>
+            <div id="sync-status-content">
+              <div class="flex items-center gap-2">
+                <span id="sync-status-badge" class="badge"></span>
+                <span id="sync-status-text" class="text-sm"></span>
+              </div>
+              <div id="sync-details" class="hidden mt-3 space-y-1 text-sm">
+                <p><span class="text-base-content/50">QB Bill ID:</span> <span id="sync-external-id" class="font-mono text-xs"></span></p>
+                <p><span class="text-base-content/50">Synced at:</span> <span id="sync-time" class="font-medium"></span></p>
+              </div>
+              <div id="sync-retry-section" class="hidden mt-3">
+                <button id="btn-retry-sync" class="btn btn-sm btn-warning w-full">
+                  Retry Sync to QuickBooks
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Confidence Score Card -->
         <div class="card bg-base-100 shadow-sm">
           <div class="card-body">
@@ -357,7 +382,7 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
 
   <!-- Client-side logic -->
   <script>
-    import { supabase, FUNCTIONS_URL } from '../../lib/supabase';
+    import { supabase, FUNCTIONS_URL, getAccessToken } from '../../lib/supabase';
 
     // --- Types ---
     interface LineItem {
@@ -391,6 +416,10 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
       pdf_storage_path: string | null;
       reviewed_by: string | null;
       reviewed_at: string | null;
+      sync_status: string | null;
+      synced_at: string | null;
+      external_accounting_id: string | null;
+      accounting_error: string | null;
       created_at: string;
       updated_at: string | null;
     }
@@ -518,15 +547,20 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
       return formatDate(dateStr);
     }
 
-    // --- Fetch invoice data ---
-    async function fetchInvoice(invoiceId: string): Promise<Invoice | null> {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
+    // --- Get auth token helper ---
+    async function getAuthToken(): Promise<string | null> {
+      const token = await getAccessToken();
+      if (!token) {
         window.location.href = '/login';
         return null;
       }
+      return token;
+    }
 
-      const token = session.access_token;
+    // --- Fetch invoice data ---
+    async function fetchInvoice(invoiceId: string): Promise<Invoice | null> {
+      const token = await getAuthToken();
+      if (!token) return null;
 
       // Fetch full invoice record from approve-invoice GET endpoint
       const res = await fetch(`${FUNCTIONS_URL}/approve-invoice?invoice_id=${encodeURIComponent(invoiceId)}`, {
@@ -607,6 +641,9 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
 
       // Review details
       renderReviewDetails(invoice);
+
+      // Sync status
+      renderSyncStatus(invoice);
 
       // PDF section
       renderPdfSection(invoice);
@@ -722,6 +759,55 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
       }
     }
 
+    function renderSyncStatus(invoice: Invoice) {
+      const card = document.getElementById('sync-status-card')!;
+      const badge = document.getElementById('sync-status-badge')!;
+      const text = document.getElementById('sync-status-text')!;
+      const details = document.getElementById('sync-details')!;
+      const retrySection = document.getElementById('sync-retry-section')!;
+
+      // Show for approved, synced, or error statuses
+      if (!['approved', 'synced', 'error'].includes(invoice.status)) {
+        card.classList.add('hidden');
+        return;
+      }
+
+      card.classList.remove('hidden');
+
+      const syncStatus = invoice.sync_status || invoice.status;
+
+      if (syncStatus === 'synced') {
+        badge.className = 'badge badge-sm badge-success';
+        badge.textContent = 'Synced';
+        text.textContent = 'Bill created in QuickBooks';
+        details.classList.remove('hidden');
+        retrySection.classList.remove('hidden');
+        document.getElementById('btn-retry-sync')!.textContent = 'Re-sync to QuickBooks';
+        document.getElementById('sync-external-id')!.textContent = invoice.external_accounting_id || '--';
+        document.getElementById('sync-time')!.textContent = formatDateTime(invoice.synced_at);
+      } else if (syncStatus === 'error') {
+        badge.className = 'badge badge-sm badge-error';
+        badge.textContent = 'Failed';
+        text.textContent = invoice.accounting_error || 'Sync to QuickBooks failed';
+        details.classList.add('hidden');
+        retrySection.classList.remove('hidden');
+      } else if (syncStatus === 'approved') {
+        badge.className = 'badge badge-sm badge-ghost';
+        badge.textContent = 'Not synced';
+        text.textContent = 'Ready to sync to QuickBooks';
+        details.classList.add('hidden');
+        retrySection.classList.remove('hidden');
+        // Change button text for initial sync
+        document.getElementById('btn-retry-sync')!.textContent = 'Sync to QuickBooks';
+      } else {
+        badge.className = 'badge badge-sm badge-ghost';
+        badge.textContent = syncStatus || 'Unknown';
+        text.textContent = '';
+        details.classList.add('hidden');
+        retrySection.classList.add('hidden');
+      }
+    }
+
     function renderPdfSection(invoice: Invoice) {
       const section = document.getElementById('pdf-section')!;
       if (invoice.pdf_storage_path) {
@@ -751,17 +837,14 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
       modal.showModal();
 
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          window.location.href = '/login';
-          return;
-        }
+        const token = await getAuthToken();
+        if (!token) return;
 
         const res = await fetch(
           `${FUNCTIONS_URL}/get-invoice-pdf?invoice_id=${encodeURIComponent(currentInvoice.id)}`,
           {
             headers: {
-              'Authorization': `Bearer ${session.access_token}`,
+              'Authorization': `Bearer ${token}`,
             },
           }
         );
@@ -812,12 +895,12 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
       commentsEmpty.classList.add('hidden');
 
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
+        const token = await getAuthToken();
+        if (!token) return;
 
         const res = await fetch(`${FUNCTIONS_URL}/invoice-comments?invoice_id=${encodeURIComponent(invoiceId)}`, {
           headers: {
-            'Authorization': `Bearer ${session.access_token}`,
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
         });
@@ -903,11 +986,8 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
 
       if (!content) return;
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        window.location.href = '/login';
-        return;
-      }
+      const token = await getAuthToken();
+      if (!token) return;
 
       sendBtn.disabled = true;
       sendBtn.textContent = 'Sending...';
@@ -916,7 +996,7 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
         const res = await fetch(`${FUNCTIONS_URL}/invoice-comments`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${session.access_token}`,
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -1015,11 +1095,8 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
     async function saveEdits() {
       if (!currentInvoice) return;
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        window.location.href = '/login';
-        return;
-      }
+      const token = await getAuthToken();
+      if (!token) return;
 
       // Collect values from inputs
       const updates: Record<string, any> = {};
@@ -1051,7 +1128,7 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
         const res = await fetch(`${FUNCTIONS_URL}/approve-invoice`, {
           method: 'PATCH',
           headers: {
-            'Authorization': `Bearer ${session.access_token}`,
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -1116,11 +1193,8 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
     async function performAction(action: 'approve' | 'reject') {
       if (!currentInvoice) return;
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        window.location.href = '/login';
-        return;
-      }
+      const token = await getAuthToken();
+      if (!token) return;
 
       const btnApprove = document.getElementById('btn-approve') as HTMLButtonElement;
       const btnReject = document.getElementById('btn-reject') as HTMLButtonElement;
@@ -1137,7 +1211,7 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
         const res = await fetch(`${FUNCTIONS_URL}/approve-invoice`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${session.access_token}`,
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -1153,7 +1227,16 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
         }
 
         // Show success feedback
-        const newStatus = action === 'approve' ? 'approved' : 'rejected';
+        let newStatus = action === 'approve' ? 'approved' : 'rejected';
+        // Build success message with sync info
+        let successMsg = `Invoice ${newStatus} successfully.`;
+        if (action === 'approve' && result.sync?.synced) {
+          successMsg += ' Synced to QuickBooks.';
+          newStatus = 'synced';
+        } else if (action === 'approve' && result.sync?.synced === false) {
+          successMsg += ` QuickBooks sync failed: ${result.sync.error || 'unknown error'}`;
+        }
+
         actionFeedback.className = `alert ${action === 'approve' ? 'alert-success' : 'alert-warning'} mt-3`;
         actionFeedback.innerHTML = `
           <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
@@ -1161,7 +1244,7 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
               ? 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'
               : 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'}" />
           </svg>
-          <span>Invoice ${newStatus} successfully.</span>
+          <span>${successMsg}</span>
         `;
         actionFeedback.classList.remove('hidden');
 
@@ -1174,11 +1257,22 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
         currentInvoice.status = newStatus;
 
         // Show reviewer info immediately
-        const userEmail = session.user?.email || 'Unknown';
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        const userEmail = currentSession?.user?.email || 'Unknown';
         const reviewedAt = new Date().toISOString();
         currentInvoice.reviewed_by = userEmail;
         currentInvoice.reviewed_at = reviewedAt;
         renderReviewDetails(currentInvoice);
+
+        // Re-render sync status if approved
+        if (action === 'approve') {
+          // Fetch fresh invoice data to get sync status
+          const updatedInvoice = await fetchInvoice(currentInvoice.id);
+          if (updatedInvoice) {
+            currentInvoice = updatedInvoice;
+            renderSyncStatus(updatedInvoice);
+          }
+        }
 
       } catch (err: any) {
         actionFeedback.className = 'alert alert-error mt-3';
@@ -1282,6 +1376,53 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
 
     document.getElementById('btn-cancel-edit')?.addEventListener('click', () => {
       exitEditMode();
+    });
+
+    // --- Sync / Retry QB Sync ---
+    document.getElementById('btn-retry-sync')?.addEventListener('click', async () => {
+      if (!currentInvoice) return;
+      const btn = document.getElementById('btn-retry-sync') as HTMLButtonElement;
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Syncing...';
+
+      try {
+        const token = await getAuthToken();
+        if (!token) return;
+
+        const response = await fetch(`${FUNCTIONS_URL}/admin-accounting-sync`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'sync',
+            invoice_ids: [currentInvoice.id],
+          }),
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.synced > 0) {
+          // Refresh the invoice data to show updated sync status
+          const updatedInvoice = await fetchInvoice(currentInvoice.id);
+          if (updatedInvoice) {
+            currentInvoice = updatedInvoice;
+            renderInvoice(updatedInvoice);
+          }
+        } else if (response.ok && result.errors?.length > 0) {
+          alert(`Sync error: ${result.errors[0].error}`);
+        } else if (!response.ok) {
+          alert(`Sync error: ${result.error || 'Unknown error'}`);
+        }
+      } catch (err: any) {
+        console.error('Sync error:', err);
+        alert(`Sync failed: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText || 'Retry Sync to QuickBooks';
+      }
     });
 
     // --- PDF viewer event handler ---

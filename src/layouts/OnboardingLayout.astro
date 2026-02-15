@@ -1,0 +1,96 @@
+---
+import '../styles/globals.css';
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/800.css';
+
+interface Props {
+  title: string;
+  currentStep?: number;
+}
+
+const { title, currentStep = 0 } = Astro.props;
+
+const steps = [
+  'Company Details',
+  'Connect Email',
+  'Accounting',
+  'Preferences',
+  'Test',
+];
+---
+
+<!doctype html>
+<html lang="en" data-theme="lofi">
+  <head>
+    <meta charset="UTF-8" />
+    <title>{title} | Invoice Dashboard</title>
+    <meta name="viewport" content="width=device-width" />
+    <meta name="google-client-id" content={import.meta.env.PUBLIC_GOOGLE_CLIENT_ID || ''} />
+    <meta name="quickbooks-client-id" content={import.meta.env.PUBLIC_QUICKBOOKS_CLIENT_ID || ''} />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@500&display=swap" rel="stylesheet" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body class="min-h-screen bg-base-200">
+    <!-- Auth check -->
+    <script>
+      import { supabase } from '../lib/supabase';
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        window.location.href = '/login';
+      }
+    </script>
+
+    <!-- Minimal header -->
+    <div class="navbar bg-base-100 shadow-md px-4">
+      <div class="flex-1">
+        <span class="text-lg sm:text-xl font-bold text-base-content">
+          Invoice Dashboard
+        </span>
+      </div>
+      <div class="flex-none">
+        <button id="logout-btn" class="btn btn-ghost btn-sm text-error">Logout</button>
+      </div>
+    </div>
+
+    <!-- Progress steps -->
+    <div class="max-w-3xl mx-auto px-4 pt-6 pb-2">
+      <ul class="steps steps-horizontal w-full text-xs sm:text-sm" id="step-indicator">
+        {steps.map((label, idx) => (
+          <li
+            class={`step ${idx <= currentStep ? 'step-primary' : ''}`}
+            data-step={idx}
+            data-content={idx < currentStep ? '\u2713' : String(idx + 1)}
+          >
+            <span class="hidden sm:inline">{label}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+
+    <!-- Content -->
+    <main class="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+      <slot />
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center text-xs text-base-content/40 py-6 space-x-2">
+      <span>Setup wizard — you can always change these settings later.</span>
+      <br />
+      <a href="/terms" class="link link-hover">Terms</a>
+      <span>&middot;</span>
+      <a href="/privacy" class="link link-hover">Privacy</a>
+      <span>&middot;</span>
+      <a href="mailto:invoiceautomation@agentivegroup.ai" class="link link-hover">Contact</a>
+    </footer>
+
+    <script>
+      import { supabase } from '../lib/supabase';
+      document.getElementById('logout-btn')?.addEventListener('click', async () => {
+        await supabase.auth.signOut();
+        window.location.href = '/login';
+      });
+    </script>
+  </body>
+</html>
