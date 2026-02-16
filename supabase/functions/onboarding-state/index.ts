@@ -164,6 +164,8 @@ async function handlePut(
       return await checkInvoices(customerId);
     case "test_complete":
       return await completeOnboarding(customerId);
+    case "test_slack_webhook":
+      return await testSlackWebhook(data);
     default:
       throw new Error(`Unknown step: ${step}`);
   }
@@ -479,6 +481,41 @@ async function savePreferences(
     .eq("id", customerId);
 
   return { next_step: "test_pipeline" };
+}
+
+// --- Test Slack Webhook ---
+
+async function testSlackWebhook(
+  data: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const webhookUrl = data.webhook_url as string;
+  if (!webhookUrl || !webhookUrl.startsWith("https://hooks.slack.com/")) {
+    throw new Error("Invalid Slack webhook URL");
+  }
+
+  const res = await fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      blocks: [
+        {
+          type: "header",
+          text: { type: "plain_text", text: ":white_check_mark: Test Notification", emoji: true },
+        },
+        {
+          type: "section",
+          text: { type: "mrkdwn", text: "Slack notifications are working! You will receive alerts here when invoices are processed, approved, or synced." },
+        },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Slack returned ${res.status}: ${err}`);
+  }
+
+  return { sent: true };
 }
 
 // --- Fetch expense accounts from QuickBooks ---

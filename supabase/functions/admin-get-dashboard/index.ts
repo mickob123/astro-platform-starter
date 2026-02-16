@@ -51,10 +51,7 @@ Deno.serve(async (req: Request) => {
     if (dateFrom) {
       summaryQuery = summaryQuery.gte("created_at", dateFrom);
     }
-    const [invoicesResult, logsResult] = await Promise.all([
-      summaryQuery,
-      supabase.from("processing_logs").select("id, status", { count: "exact", head: false }),
-    ]);
+    const invoicesResult = await summaryQuery;
 
     const allInvoices = invoicesResult.data || [];
     const totalInvoices = allInvoices.length;
@@ -70,8 +67,8 @@ Deno.serve(async (req: Request) => {
     const amountApproved = allInvoices
       .filter((inv: { status?: string }) => inv.status === "approved")
       .reduce((sum: number, inv: { total?: number }) => sum + (inv.total || 0), 0);
-    const failedLogs = (logsResult.data || []).filter(
-      (log: { status?: string }) => log.status === "error",
+    const failedProcessing = allInvoices.filter(
+      (inv: { status?: string }) => inv.status === "error",
     ).length;
 
     // --- Paginated invoices (exclude soft-deleted unless explicitly filtered) ---
@@ -110,7 +107,7 @@ Deno.serve(async (req: Request) => {
           approved: approvedCount,
           amount_awaiting_approval: amountAwaitingApproval,
           amount_approved: amountApproved,
-          failed_processing: failedLogs,
+          failed_processing: failedProcessing,
         },
         invoices,
         pagination: {

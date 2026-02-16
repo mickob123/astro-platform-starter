@@ -838,20 +838,23 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     notifTestResult.classList.add('hidden');
 
     try {
-      const res = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const token = await getAuthToken();
+      if (!token) {
+        notifTestResult.textContent = 'Not authenticated';
+        notifTestResult.className = 'text-sm ml-2 text-error';
+        notifTestResult.classList.remove('hidden');
+        return;
+      }
+
+      const res = await fetch(`${FUNCTIONS_URL}/onboarding-state`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          blocks: [
-            {
-              type: 'header',
-              text: { type: 'plain_text', text: ':white_check_mark: Test Notification', emoji: true },
-            },
-            {
-              type: 'section',
-              text: { type: 'mrkdwn', text: 'Slack notifications are working! You will receive alerts here when invoices are processed, approved, or synced.' },
-            },
-          ],
+          step: 'test_slack_webhook',
+          data: { webhook_url: webhookUrl },
         }),
       });
 
@@ -859,7 +862,8 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
         notifTestResult.textContent = 'Sent! Check your Slack channel.';
         notifTestResult.className = 'text-sm ml-2 text-success';
       } else {
-        notifTestResult.textContent = `Failed (${res.status}). Check your webhook URL.`;
+        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+        notifTestResult.textContent = err.error || `Failed (${res.status}). Check your webhook URL.`;
         notifTestResult.className = 'text-sm ml-2 text-error';
       }
     } catch {
