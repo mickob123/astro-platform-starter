@@ -193,26 +193,51 @@ function extractTextBody(message: Record<string, unknown>): string {
   return "";
 }
 
-async function markAsRead(accessToken: string, messageId: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${GMAIL_API}/messages/${messageId}/modify`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ removeLabelIds: ["UNREAD"] }),
-    });
-    if (!res.ok) {
-      const err = await res.text();
-      console.error(`markAsRead failed for ${messageId} (${res.status}): ${err}`);
-      return false;
+/**
+ * Track processed Gmail message IDs in the processing_logs table
+ * to avoid re-processing (since we only have gmail.readonly scope).
+ */
+async function getProcessedMessageIds(
+  supabase: ReturnType<typeof createClient>,
+  connectionId: string,
+): Promise<Set<string>> {
+  const { data } = await supabase
+    .from("processing_logs")
+    .select("input")
+    .eq("step", "poll-email-seen")
+    .eq("status", "success")
+    .contains("input", { connection_id: connectionId });
+
+  const ids = new Set<string>();
+  if (data) {
+    for (const row of data) {
+      const gmailId = (row.input as Record<string, unknown>)?.gmail_message_id;
+      if (typeof gmailId === "string") ids.add(gmailId);
     }
-    return true;
-  } catch (err) {
-    console.error(`markAsRead exception for ${messageId}:`, err);
-    return false;
   }
+  return ids;
+}
+
+async function markMessageProcessed(
+  supabase: ReturnType<typeof createClient>,
+  customerId: string,
+  connectionId: string,
+  gmailMessageId: string,
+): Promise<string | null> {
+  const { error } = await supabase.from("processing_logs").insert({
+    customer_id: customerId,
+    status: "success",
+    step: "poll-email-seen",
+    input: {
+      gmail_message_id: gmailMessageId,
+      connection_id: connectionId,
+    },
+  });
+  if (error) {
+    console.error(`markMessageProcessed failed for ${gmailMessageId}: ${error.message}`);
+    return error.message;
+  }
+  return null;
 }
 
 /**
@@ -286,13 +311,24 @@ Deno.serve(async (req: Request) => {
     for (const conn of connections as EmailConnection[]) {
       try {
         const accessToken = await ensureValidToken(conn);
+
+        // Get already-processed message IDs for this connection (dedup)
+        const processedIds = await getProcessedMessageIds(supabase, conn.id);
+
         const messages = await fetchUnreadMessages(accessToken, 10);
 
         if (messages.length === 0) continue;
 
-        console.log(`${conn.email_address}: Found ${messages.length} unread messages`);
+        // Filter out already-processed messages
+        const newMessages = messages.filter((m) => !processedIds.has(m.id));
+        if (newMessages.length === 0) {
+          console.log(`${conn.email_address}: ${messages.length} unread, all already processed`);
+          continue;
+        }
 
-        for (const msg of messages) {
+        console.log(`${conn.email_address}: ${newMessages.length} new of ${messages.length} unread`);
+
+        for (const msg of newMessages) {
           try {
             const message = await getMessageDetails(accessToken, msg.id);
             const subject = getHeader(message, "Subject");
@@ -302,7 +338,7 @@ Deno.serve(async (req: Request) => {
 
             let pdfStoragePath: string | null = null;
             let pdfFilename: string | null = null;
-            let attachmentText: string | null = null;
+            const attachmentText: string | null = null;
 
             if (pdfs.length > 0) {
               const pdf = pdfs[0];
@@ -327,10 +363,14 @@ Deno.serve(async (req: Request) => {
               },
             });
 
-            // Mark as read after successful processing
-            const marked = await markAsRead(accessToken, msg.id);
-            if (!marked) {
-              console.warn(`Failed to mark message ${msg.id} as read — will be re-polled`);
+            // Record this message as processed (dedup for next poll)
+            const markErr = await markMessageProcessed(supabase, conn.customer_id, conn.id, msg.id);
+            if (markErr) {
+              errors.push({
+                gmail_message_id: msg.id,
+                email: conn.email_address,
+                error: `dedup insert failed: ${markErr}`,
+              });
             }
           } catch (msgErr) {
             console.error(`Failed to process message ${msg.id}:`, msgErr);
@@ -339,7 +379,6 @@ Deno.serve(async (req: Request) => {
               email: conn.email_address,
               error: msgErr instanceof Error ? msgErr.message : "Unknown error",
             });
-            try { await markAsRead(accessToken, msg.id); } catch { /* ignore */ }
           }
         }
       } catch (connErr) {
