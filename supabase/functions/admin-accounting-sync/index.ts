@@ -240,8 +240,10 @@ async function resolveExpenseAccount(
   const categoryMap: Array<{ keywords: string[]; accountNames: string[] }> = [
     { keywords: ["electric", "energy", "gas", "water", "power", "utility", "broadband", "internet", "telstra", "optus", "nbn"],
       accountNames: ["Utilities", "Utility"] },
-    { keywords: ["office", "stationery", "supplies", "officeworks"],
-      accountNames: ["Office Supplies", "Office/General Administrative"] },
+    { keywords: ["office", "stationery", "supplies", "officeworks", "bing lee", "electronics", "computer", "laptop", "ipad", "tablet", "printer", "jb hi-fi", "harvey norman"],
+      accountNames: ["Office Supplies", "Office/General Administrative", "Office Expenses"] },
+    { keywords: ["equipment", "furniture", "desk", "chair", "monitor"],
+      accountNames: ["Equipment", "Equipment Rental"] },
     { keywords: ["rent", "lease", "property"],
       accountNames: ["Rent", "Rent or Lease"] },
     { keywords: ["insurance"],
@@ -270,7 +272,10 @@ async function resolveExpenseAccount(
       const match = accounts.find((a: any) =>
         mapping.accountNames.some((name) => a.name.toLowerCase().includes(name.toLowerCase())),
       );
-      if (match) return match.id;
+      if (match) {
+        console.log(`Expense account resolved: "${match.name}" (${match.id}) for vendor "${vendorName}"`);
+        return match.id;
+      }
     }
   }
 
@@ -278,9 +283,13 @@ async function resolveExpenseAccount(
   const fallback = accounts.find((a: any) =>
     a.name.toLowerCase().includes("uncategorized") || a.name.toLowerCase().includes("other expense"),
   );
-  if (fallback) return fallback.id;
+  if (fallback) {
+    console.log(`Expense account fallback: "${fallback.name}" (${fallback.id}) for vendor "${vendorName}"`);
+    return fallback.id;
+  }
 
   // Last resort: use first expense account
+  console.log(`Expense account last resort: "${accounts[0]?.name}" (${accounts[0]?.id}) for vendor "${vendorName}"`);
   return accounts[0]?.id || "1";
 }
 
@@ -294,46 +303,27 @@ async function createQBBill(
   accessToken: string,
   companyId: string,
 ): Promise<{ billId: string }> {
-  const lineItems = (invoice.line_items || []).map(
-    (item: { total: number; description: string }, index: number) => ({
-      Id: String(index + 1),
-      DetailType: "AccountBasedExpenseLineDetail",
-      Amount: item.total,
-      Description: item.description || "Line item",
-      AccountBasedExpenseLineDetail: {
-        AccountRef: { value: expenseAccountId },
-        BillableStatus: "NotBillable",
-      },
-    }),
-  );
+  // Build a single line item with the invoice total (including tax).
+  // Using one line avoids QB showing "--Split--" in the Category column.
+  const descriptions = (invoice.line_items || [])
+    .map((item: { description: string }) => item.description)
+    .filter(Boolean);
+  const lineDescription = descriptions.length > 0
+    ? descriptions.join("; ")
+    : invoice.invoice_number || "Invoice";
 
-  // Add tax as separate line if present
-  if (invoice.tax && invoice.tax > 0) {
-    lineItems.push({
-      Id: String(lineItems.length + 1),
-      DetailType: "AccountBasedExpenseLineDetail",
-      Amount: invoice.tax,
-      Description: "Tax",
-      AccountBasedExpenseLineDetail: {
-        AccountRef: { value: expenseAccountId },
-        BillableStatus: "NotBillable",
-      },
-    });
-  }
-
-  // If no line items, create a single line with the total
-  if (lineItems.length === 0) {
-    lineItems.push({
+  const lineItems = [
+    {
       Id: "1",
       DetailType: "AccountBasedExpenseLineDetail",
       Amount: invoice.total,
-      Description: invoice.invoice_number || "Invoice",
+      Description: lineDescription,
       AccountBasedExpenseLineDetail: {
         AccountRef: { value: expenseAccountId },
         BillableStatus: "NotBillable",
       },
-    });
-  }
+    },
+  ];
 
   const billPayload: Record<string, unknown> = {
     VendorRef: { value: qbVendorId },
@@ -744,12 +734,29 @@ Deno.serve(async (req: Request) => {
 
             if (existing.ok && existing.data?.Bill) {
               const updatedBill = { ...existing.data.Bill };
-              // Update line items with correct expense account
-              for (const line of updatedBill.Line || []) {
-                if (line.AccountBasedExpenseLineDetail) {
-                  line.AccountBasedExpenseLineDetail.AccountRef = { value: categoryAccountId };
-                }
-              }
+              // Consolidate to a single line with the correct expense account
+              // This avoids QB showing "--Split--" in the Category column
+              const descriptions = (invoice.line_items || [])
+                .map((li: any) => li.description)
+                .filter(Boolean);
+              const lineDesc = descriptions.length > 0
+                ? descriptions.join("; ")
+                : invoice.invoice_number || "Invoice";
+
+              updatedBill.Line = [
+                {
+                  Id: "1",
+                  DetailType: "AccountBasedExpenseLineDetail",
+                  Amount: invoice.total,
+                  Description: lineDesc,
+                  AccountBasedExpenseLineDetail: {
+                    AccountRef: { value: categoryAccountId },
+                    BillableStatus: "NotBillable",
+                  },
+                },
+              ];
+              updatedBill.TotalAmt = invoice.total;
+
               const updateResult = await qbFetch(
                 "POST",
                 "bill",

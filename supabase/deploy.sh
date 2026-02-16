@@ -98,11 +98,15 @@ supabase functions deploy email-intake --no-verify-jwt
 echo "[22/23] Deploying onboarding-register (no auth - public signup)..."
 supabase functions deploy onboarding-register --no-verify-jwt
 
-echo "[23/23] Deploying onboarding-state (JWT auth)..."
+echo "[23/24] Deploying onboarding-state (JWT auth)..."
 supabase functions deploy onboarding-state --no-verify-jwt
 
+# --- Email polling: API key auth (called by n8n schedule) ---
+echo "[24/24] Deploying poll-emails (API key auth)..."
+supabase functions deploy poll-emails --no-verify-jwt
+
 echo ""
-echo "=== All 23 functions deployed ==="
+echo "=== All 24 functions deployed ==="
 echo ""
 echo "IMPORTANT: Make sure you have set these secrets:"
 echo "  supabase secrets set ALLOWED_ORIGINS=\"https://your-admin.netlify.app,https://n8n.agentivegroup.ai\""

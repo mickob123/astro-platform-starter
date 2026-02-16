@@ -156,7 +156,10 @@ import OnboardingLayout from '../../layouts/OnboardingLayout.astro';
           </div>
           <div class="card-actions justify-between mt-4">
             <button class="btn btn-ghost" id="email-back-btn">Back</button>
-            <button class="btn btn-primary" id="email-continue-btn">Continue</button>
+            <div class="flex gap-2">
+              <button class="btn btn-outline btn-sm" id="email-change-btn">Connect Different Account</button>
+              <button class="btn btn-primary" id="email-continue-btn">Continue</button>
+            </div>
           </div>
         </div>
 
@@ -495,8 +498,10 @@ import OnboardingLayout from '../../layouts/OnboardingLayout.astro';
       const state = await response.json();
       customerData = state.customer || {};
 
-      // If completed, go to dashboard
-      if (state.completed) {
+      // If completed, check if we were sent here for a specific reconnection step
+      const urlParams = new URLSearchParams(window.location.search);
+      const requestedStep = urlParams.get('step');
+      if (state.completed && !requestedStep) {
         window.location.href = '/dashboard';
         return;
       }
@@ -540,8 +545,11 @@ import OnboardingLayout from '../../layouts/OnboardingLayout.astro';
         }
       }
 
-      // Show the current step
-      showStep(state.current_step || 'company_details');
+      // Show the requested step (from ?step= param) or current onboarding step
+      const targetStep = requestedStep && STEPS.includes(requestedStep)
+        ? requestedStep
+        : (state.current_step || 'company_details');
+      showStep(targetStep);
     } catch (err) {
       showError(err instanceof Error ? err.message : 'Failed to load');
     }
@@ -695,7 +703,7 @@ import OnboardingLayout from '../../layouts/OnboardingLayout.astro';
       client_id: GOOGLE_CLIENT_ID,
       redirect_uri: `${window.location.origin}/onboarding`,
       response_type: 'code',
-      scope: 'https://www.googleapis.com/auth/gmail.readonly',
+      scope: 'https://www.googleapis.com/auth/gmail.readonly email profile',
       access_type: 'offline',
       prompt: 'consent',
       state: 'gmail_connect',
@@ -710,6 +718,12 @@ import OnboardingLayout from '../../layouts/OnboardingLayout.astro';
 
   document.getElementById('email-continue-btn')?.addEventListener('click', () => {
     showStep('connect_accounting');
+  });
+
+  document.getElementById('email-change-btn')?.addEventListener('click', () => {
+    // Show the connect prompt again so user can re-authenticate with a different account
+    document.getElementById('email-connected')?.classList.add('hidden');
+    document.getElementById('email-connect-prompt')?.classList.remove('hidden');
   });
 
   document.getElementById('email-retry-btn')?.addEventListener('click', () => {
