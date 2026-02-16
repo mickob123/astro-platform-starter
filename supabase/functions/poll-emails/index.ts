@@ -312,6 +312,27 @@ Deno.serve(async (req: Request) => {
       try {
         const accessToken = await ensureValidToken(conn);
 
+        // Backfill missing email_address from Gmail profile
+        if (!conn.email_address) {
+          try {
+            const profileRes = await fetch(`${GMAIL_API}/profile`, {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            });
+            if (profileRes.ok) {
+              const profile = await profileRes.json();
+              if (profile.emailAddress) {
+                await supabase.from("email_connections")
+                  .update({ email_address: profile.emailAddress })
+                  .eq("id", conn.id);
+                conn.email_address = profile.emailAddress;
+                console.log(`Backfilled email_address: ${profile.emailAddress}`);
+              }
+            }
+          } catch (e) {
+            console.warn("Failed to backfill email_address:", e);
+          }
+        }
+
         // Get already-processed message IDs for this connection (dedup)
         const processedIds = await getProcessedMessageIds(supabase, conn.id);
 
