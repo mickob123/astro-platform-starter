@@ -67,7 +67,7 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
           <div class="card-body">
             <div class="flex items-center justify-between mb-4">
               <h2 class="card-title text-lg">Invoice Information</h2>
-              <div class="flex gap-2">
+              <div class="flex gap-2 admin-only">
                 <button id="btn-edit-invoice" class="btn btn-ghost btn-xs">Edit</button>
                 <button id="btn-save-invoice" class="btn btn-primary btn-xs hidden">Save</button>
                 <button id="btn-cancel-edit" class="btn btn-ghost btn-xs hidden">Cancel</button>
@@ -200,8 +200,8 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
       <!-- Right column: Actions & Validation (1/3 width) -->
       <div class="flex flex-col gap-6">
 
-        <!-- Actions Card -->
-        <div class="card bg-base-100 shadow-sm">
+        <!-- Actions Card (admin-only: viewers cannot approve/reject) -->
+        <div class="card bg-base-100 shadow-sm admin-only">
           <div class="card-body">
             <h2 class="card-title text-lg mb-4">Actions</h2>
             <div class="flex flex-col gap-3">
@@ -258,10 +258,10 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
                 <span id="sync-status-text" class="text-sm"></span>
               </div>
               <div id="sync-details" class="hidden mt-3 space-y-1 text-sm">
-                <p><span class="text-base-content/50">QB Bill ID:</span> <span id="sync-external-id" class="font-mono text-xs"></span></p>
+                <p><span class="text-base-content/50" id="sync-id-label">QB Bill ID:</span> <span id="sync-external-id" class="font-mono text-xs"></span></p>
                 <p><span class="text-base-content/50">Synced at:</span> <span id="sync-time" class="font-medium"></span></p>
               </div>
-              <div id="sync-retry-section" class="hidden mt-3">
+              <div id="sync-retry-section" class="hidden mt-3 admin-only">
                 <button id="btn-retry-sync" class="btn btn-sm btn-warning w-full">
                   Retry Sync to QuickBooks
                 </button>
@@ -416,6 +416,7 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
       pdf_storage_path: string | null;
       reviewed_by: string | null;
       reviewed_at: string | null;
+      document_type: string | null;
       sync_status: string | null;
       synced_at: string | null;
       external_accounting_id: string | null;
@@ -581,19 +582,40 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
 
     // --- Render functions ---
     function renderInvoice(invoice: Invoice) {
+      const isExpense = invoice.document_type === 'expense';
+      const docLabel = isExpense ? 'Expense' : 'Invoice';
+
       // Title & breadcrumb
       const titleEl = document.getElementById('invoice-title')!;
       const subtitleEl = document.getElementById('invoice-subtitle')!;
       titleEl.textContent = invoice.invoice_number
-        ? `Invoice #${invoice.invoice_number}`
-        : 'Invoice';
+        ? `${docLabel} #${invoice.invoice_number}`
+        : docLabel;
       subtitleEl.textContent = `Created ${formatDateTime(invoice.created_at)}`;
       breadcrumbInvoice.textContent = invoice.invoice_number
         ? `#${invoice.invoice_number}`
         : invoice.id.substring(0, 8);
 
       // Update page title
-      document.title = `${invoice.invoice_number || 'Invoice'} | Invoice Dashboard`;
+      document.title = `${invoice.invoice_number || docLabel} | Invoice Dashboard`;
+
+      // Update back link and breadcrumb to point to correct list
+      const backLink = document.querySelector('a[href="/dashboard"]') as HTMLAnchorElement | null;
+      const breadcrumbLink = document.querySelector('.breadcrumbs a[href="/dashboard"]') as HTMLAnchorElement | null;
+      if (isExpense) {
+        if (backLink) backLink.href = '/expenses';
+        if (breadcrumbLink) {
+          breadcrumbLink.href = '/expenses';
+          breadcrumbLink.textContent = 'Expenses';
+        }
+      }
+
+      // Due Date label → Payment Date for expenses
+      if (isExpense) {
+        const dueDateEl = document.getElementById('detail-due-date');
+        const dueDateLabel = dueDateEl?.previousElementSibling as HTMLElement | null;
+        if (dueDateLabel) dueDateLabel.textContent = 'Payment Date';
+      }
 
       // Status badge
       const statusBadge = document.getElementById('status-badge')!;
@@ -648,10 +670,18 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
       // PDF section
       renderPdfSection(invoice);
 
+      // Update action button labels for expenses
+      const btnApproveEl = document.getElementById('btn-approve') as HTMLButtonElement;
+      const btnRejectEl = document.getElementById('btn-reject') as HTMLButtonElement;
+      if (isExpense) {
+        btnApproveEl.innerHTML = btnApproveEl.innerHTML.replace('Approve Invoice', 'Approve Expense');
+        btnRejectEl.innerHTML = btnRejectEl.innerHTML.replace('Reject Invoice', 'Reject Expense');
+      }
+
       // Enable/disable action buttons based on status
       const canAct = ['pending', 'flagged'].includes(invoice.status);
-      (document.getElementById('btn-approve') as HTMLButtonElement).disabled = !canAct;
-      (document.getElementById('btn-reject') as HTMLButtonElement).disabled = !canAct;
+      btnApproveEl.disabled = !canAct;
+      btnRejectEl.disabled = !canAct;
     }
 
     function renderLineItems(lineItems: LineItem[] | null, currency: string | null) {
@@ -776,13 +806,15 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
 
       const syncStatus = invoice.sync_status || invoice.status;
 
+      const isExpenseDoc = invoice.document_type === 'expense';
       if (syncStatus === 'synced') {
         badge.className = 'badge badge-sm badge-success';
         badge.textContent = 'Synced';
-        text.textContent = 'Bill created in QuickBooks';
+        text.textContent = isExpenseDoc ? 'Purchase created in QuickBooks' : 'Bill created in QuickBooks';
         details.classList.remove('hidden');
         retrySection.classList.remove('hidden');
         document.getElementById('btn-retry-sync')!.textContent = 'Re-sync to QuickBooks';
+        document.getElementById('sync-id-label')!.textContent = isExpenseDoc ? 'QB Purchase ID:' : 'QB Bill ID:';
         document.getElementById('sync-external-id')!.textContent = invoice.external_accounting_id || '--';
         document.getElementById('sync-time')!.textContent = formatDateTime(invoice.synced_at);
       } else if (syncStatus === 'error') {

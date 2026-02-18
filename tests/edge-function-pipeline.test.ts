@@ -367,6 +367,9 @@ describe("Edge Function Pipeline — Processing Log Steps", () => {
       "classify_done",
       "extract",
       "extract_done",
+      "verify",
+      "verify_done",
+      "duplicate_check",
       "validate",
       "validate_done",
       "save",
@@ -415,6 +418,94 @@ describe("Edge Function Pipeline — Processing Log Steps", () => {
 
     expect(duration).toBe(2500);
     expect(duration).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Verification step
+// ---------------------------------------------------------------------------
+describe("Edge Function Pipeline — Verification Step", () => {
+  it("should pass data through unchanged when verified", () => {
+    const extraction = makeExtraction();
+    const verification = {
+      status: "VERIFIED",
+      corrections: [],
+      data: extraction,
+    };
+
+    // When status is VERIFIED, verifiedExtraction === extraction
+    const verifiedExtraction = verification.status === "CORRECTED" && verification.data
+      ? verification.data
+      : extraction;
+
+    expect(verifiedExtraction).toEqual(extraction);
+    expect(verification.corrections).toHaveLength(0);
+  });
+
+  it("should apply corrections when status is CORRECTED", () => {
+    const extraction = makeExtraction({
+      subtotal: 1000,
+      tax: 100,
+      total: 1200, // wrong
+    });
+
+    const correctedData = {
+      ...extraction,
+      total: 1100, // fixed
+    };
+
+    const verification = {
+      status: "CORRECTED",
+      corrections: ["Fixed total: 1200 -> 1100 (subtotal 1000 + tax 100)"],
+      data: correctedData,
+    };
+
+    const verifiedExtraction = verification.status === "CORRECTED" && verification.data
+      ? verification.data
+      : extraction;
+
+    expect(verifiedExtraction.total).toBe(1100);
+    expect(verification.corrections).toHaveLength(1);
+    expect(verification.corrections[0]).toContain("Fixed total");
+  });
+
+  it("should include verification in response shape", () => {
+    const classification = makeClassification();
+    const extraction = makeExtraction();
+    const verification = { status: "VERIFIED", corrections: [] };
+    const validation = pipelineValidateInvoice(extraction, []);
+
+    const response = {
+      status: "completed",
+      invoice_id: "mock-id",
+      log_id: "mock-log",
+      classification,
+      extraction,
+      verification,
+      validation,
+    };
+
+    expect(response.verification.status).toBe("VERIFIED");
+    expect(response.verification.corrections).toHaveLength(0);
+    expect(response.validation.is_valid).toBe(true);
+  });
+
+  it("should validate corrected data not original", () => {
+    // Extraction has a math error
+    const extraction = makeExtraction({
+      subtotal: 1000,
+      tax: 100,
+      total: 1200, // wrong
+    });
+
+    // Verification corrects it
+    const correctedData = { ...extraction, total: 1100 };
+    const verifiedExtraction = correctedData;
+
+    // Validation runs on corrected data
+    const validation = pipelineValidateInvoice(verifiedExtraction, []);
+    expect(validation.is_valid).toBe(true);
+    expect(validation.errors).toHaveLength(0);
   });
 });
 

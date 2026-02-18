@@ -18,7 +18,7 @@ import {
 } from "../_shared/cors.ts";
 import {
   verifyJwt,
-  requireAdmin,
+  requireRole,
   AuthError,
 } from "../_shared/auth.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -30,7 +30,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const { user } = await verifyJwt(req);
-    requireAdmin(user);
+    requireRole(user, ["admin", "viewer"]);
 
     if (req.method !== "GET") {
       return new Response(
@@ -75,7 +75,7 @@ Deno.serve(async (req: Request) => {
     let query = supabase
       .from("vendors")
       .select(
-        "id, name, normalized_name, created_at, " +
+        "id, name, normalized_name, email, phone, address_line1, address_line2, city, state, postal_code, country, website, tax_id, created_at, " +
           "invoices(id, total, status, created_at)",
         { count: "exact" },
       );
@@ -111,6 +111,16 @@ Deno.serve(async (req: Request) => {
         id: string;
         name: string;
         normalized_name: string | null;
+        email: string | null;
+        phone: string | null;
+        address_line1: string | null;
+        address_line2: string | null;
+        city: string | null;
+        state: string | null;
+        postal_code: string | null;
+        country: string | null;
+        website: string | null;
+        tax_id: string | null;
         created_at: string;
         invoices: InvoiceRow[];
       }) => {
@@ -148,6 +158,16 @@ Deno.serve(async (req: Request) => {
         return {
           id: v.id,
           name: v.name,
+          email: v.email,
+          phone: v.phone,
+          address_line1: v.address_line1,
+          address_line2: v.address_line2,
+          city: v.city,
+          state: v.state,
+          postal_code: v.postal_code,
+          country: v.country,
+          website: v.website,
+          tax_id: v.tax_id,
           created_at: v.created_at,
           invoice_count: invs.length,
           total_spend: totalSpend,

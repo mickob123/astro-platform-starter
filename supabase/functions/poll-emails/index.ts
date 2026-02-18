@@ -288,6 +288,9 @@ Deno.serve(async (req: Request) => {
   try {
     await verifyApiKey(req);
 
+    const url = new URL(req.url);
+    const forceReprocess = url.searchParams.get("force") === "true";
+
     const supabase = serviceClient();
 
     const { data: connections, error: connError } = await supabase
@@ -307,7 +310,6 @@ Deno.serve(async (req: Request) => {
     // Collect all emails ready for processing
     const emails: Array<Record<string, unknown>> = [];
     const errors: Array<Record<string, unknown>> = [];
-
     for (const conn of connections as EmailConnection[]) {
       try {
         const accessToken = await ensureValidToken(conn);
@@ -334,18 +336,14 @@ Deno.serve(async (req: Request) => {
         }
 
         // Get already-processed message IDs for this connection (dedup)
-        const processedIds = await getProcessedMessageIds(supabase, conn.id);
+        const processedIds = forceReprocess ? new Set<string>() : await getProcessedMessageIds(supabase, conn.id);
 
         const messages = await fetchUnreadMessages(accessToken, 10);
-
         if (messages.length === 0) continue;
 
         // Filter out already-processed messages
         const newMessages = messages.filter((m) => !processedIds.has(m.id));
-        if (newMessages.length === 0) {
-          console.log(`${conn.email_address}: ${messages.length} unread, all already processed`);
-          continue;
-        }
+        if (newMessages.length === 0) continue;
 
         console.log(`${conn.email_address}: ${newMessages.length} new of ${messages.length} unread`);
 

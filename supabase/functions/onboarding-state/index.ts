@@ -26,6 +26,7 @@ import { verifyJwt, AuthError } from "../_shared/auth.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const QB_API_BASE = Deno.env.get("QUICKBOOKS_API_BASE") || "https://sandbox-quickbooks.api.intuit.com/v3/company";
+const QB_TOKEN_URL = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -520,6 +521,49 @@ async function testSlackWebhook(
 
 // --- Fetch expense accounts from QuickBooks ---
 
+async function refreshQbToken(
+  connId: string,
+  refreshToken: string,
+  supabase: SupabaseClient,
+): Promise<string | null> {
+  const clientId = Deno.env.get("QUICKBOOKS_CLIENT_ID");
+  const clientSecret = Deno.env.get("QUICKBOOKS_CLIENT_SECRET");
+  if (!clientId || !clientSecret) return null;
+
+  const basicAuth = btoa(`${clientId}:${clientSecret}`);
+  const res = await fetch(QB_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${basicAuth}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+    },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+    }),
+  });
+
+  if (!res.ok) {
+    console.error("QB token refresh failed:", await res.text());
+    return null;
+  }
+
+  const tokens = await res.json();
+  const newExpiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+
+  await supabase
+    .from("accounting_connections")
+    .update({
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      token_expires_at: newExpiresAt,
+    })
+    .eq("id", connId);
+
+  return tokens.access_token;
+}
+
 async function fetchExpenseAccounts(
   customerId: string,
 ): Promise<Record<string, unknown>> {
@@ -527,7 +571,7 @@ async function fetchExpenseAccounts(
 
   const { data: conn } = await supabase
     .from("accounting_connections")
-    .select("access_token, company_id, provider")
+    .select("id, access_token, refresh_token, token_expires_at, company_id, provider")
     .eq("customer_id", customerId)
     .eq("is_active", true)
     .maybeSingle();
@@ -538,6 +582,17 @@ async function fetchExpenseAccounts(
 
   if (conn.provider === "quickbooks") {
     try {
+      // Refresh token if expired or expiring soon
+      let accessToken = conn.access_token;
+      const expiresAt = conn.token_expires_at ? new Date(conn.token_expires_at).getTime() : 0;
+      if (expiresAt - Date.now() < 5 * 60 * 1000) {
+        const refreshed = await refreshQbToken(conn.id, conn.refresh_token, supabase);
+        if (!refreshed) {
+          return { accounts: [], current_default: null, error: "QuickBooks token expired. Please reconnect." };
+        }
+        accessToken = refreshed;
+      }
+
       const query = encodeURIComponent(
         "SELECT * FROM Account WHERE AccountType IN ('Expense', 'Cost of Goods Sold') AND Active = true MAXRESULTS 200",
       );
@@ -545,7 +600,7 @@ async function fetchExpenseAccounts(
         `${QB_API_BASE}/${conn.company_id}/query?query=${query}&minorversion=65`,
         {
           headers: {
-            Authorization: `Bearer ${conn.access_token}`,
+            Authorization: `Bearer ${accessToken}`,
             Accept: "application/json",
           },
         },

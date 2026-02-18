@@ -8,13 +8,26 @@ import { describe, it, expect, vi } from "vitest";
  *   - SHA-256 hashing consistency (via crypto.subtle which Node 20+ supports)
  */
 
-// ---------- Re-implement AuthError locally to test its contract ----------
+// ---------- Re-implement auth module locally to test its contract ----------
 class AuthError extends Error {
   status: number;
   constructor(message: string, status = 401) {
     super(message);
     this.name = "AuthError";
     this.status = status;
+  }
+}
+
+function requireAdmin(user: { app_metadata?: Record<string, unknown> }): void {
+  if (user.app_metadata?.role !== "admin") {
+    throw new AuthError("Admin access required", 403);
+  }
+}
+
+function requireRole(user: { app_metadata?: Record<string, unknown> }, allowedRoles: string[]): void {
+  const role = user.app_metadata?.role as string | undefined;
+  if (!role || !allowedRoles.includes(role)) {
+    throw new AuthError("Insufficient permissions", 403);
   }
 }
 
@@ -72,6 +85,70 @@ describe("Auth Utilities", () => {
       const error = new AuthError("test");
       expect(error.stack).toBeDefined();
       expect(error.stack).toContain("AuthError");
+    });
+  });
+
+  describe("requireAdmin", () => {
+    it("should pass for admin role", () => {
+      expect(() => requireAdmin({ app_metadata: { role: "admin" } })).not.toThrow();
+    });
+
+    it("should throw 403 for viewer role", () => {
+      expect(() => requireAdmin({ app_metadata: { role: "viewer" } })).toThrow(AuthError);
+      try {
+        requireAdmin({ app_metadata: { role: "viewer" } });
+      } catch (e: any) {
+        expect(e.status).toBe(403);
+        expect(e.message).toBe("Admin access required");
+      }
+    });
+
+    it("should throw 403 for missing role", () => {
+      expect(() => requireAdmin({ app_metadata: {} })).toThrow(AuthError);
+    });
+
+    it("should throw 403 for missing app_metadata", () => {
+      expect(() => requireAdmin({})).toThrow(AuthError);
+    });
+  });
+
+  describe("requireRole", () => {
+    it("should pass for admin when allowed roles include admin", () => {
+      expect(() => requireRole({ app_metadata: { role: "admin" } }, ["admin", "viewer"])).not.toThrow();
+    });
+
+    it("should pass for viewer when allowed roles include viewer", () => {
+      expect(() => requireRole({ app_metadata: { role: "viewer" } }, ["admin", "viewer"])).not.toThrow();
+    });
+
+    it("should throw 403 for viewer when only admin is allowed", () => {
+      expect(() => requireRole({ app_metadata: { role: "viewer" } }, ["admin"])).toThrow(AuthError);
+      try {
+        requireRole({ app_metadata: { role: "viewer" } }, ["admin"]);
+      } catch (e: any) {
+        expect(e.status).toBe(403);
+        expect(e.message).toBe("Insufficient permissions");
+      }
+    });
+
+    it("should throw 403 for unknown role", () => {
+      expect(() => requireRole({ app_metadata: { role: "editor" } }, ["admin", "viewer"])).toThrow(AuthError);
+    });
+
+    it("should throw 403 for missing role", () => {
+      expect(() => requireRole({ app_metadata: {} }, ["admin", "viewer"])).toThrow(AuthError);
+    });
+
+    it("should throw 403 for undefined app_metadata", () => {
+      expect(() => requireRole({}, ["admin", "viewer"])).toThrow(AuthError);
+    });
+
+    it("should throw 403 for null app_metadata", () => {
+      expect(() => requireRole({ app_metadata: undefined }, ["admin"])).toThrow(AuthError);
+    });
+
+    it("should pass for single allowed role match", () => {
+      expect(() => requireRole({ app_metadata: { role: "viewer" } }, ["viewer"])).not.toThrow();
     });
   });
 

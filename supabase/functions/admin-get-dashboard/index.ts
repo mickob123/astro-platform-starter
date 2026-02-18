@@ -15,7 +15,7 @@
  */
 
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
-import { verifyJwt, requireAdmin, AuthError } from "../_shared/auth.ts";
+import { verifyJwt, requireRole, AuthError } from "../_shared/auth.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 Deno.serve(async (req: Request) => {
@@ -25,7 +25,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const { user } = await verifyJwt(req);
-    requireAdmin(user);
+    requireRole(user, ["admin", "viewer"]);
 
     if (req.method !== "GET") {
       return new Response(JSON.stringify({ error: "Method not allowed" }), {
@@ -40,14 +40,15 @@ Deno.serve(async (req: Request) => {
     const customerFilter = url.searchParams.get("customer_id");
     const statusFilter = url.searchParams.get("status");
     const dateFrom = url.searchParams.get("date_from");
+    const documentType = url.searchParams.get("document_type") || "invoice";
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // --- Summary stats (exclude soft-deleted invoices) ---
-    let summaryQuery = supabase.from("invoices").select("id, total, status").neq("status", "deleted");
+    // --- Summary stats (exclude soft-deleted, filter by document type) ---
+    let summaryQuery = supabase.from("invoices").select("id, total, status").neq("status", "deleted").eq("document_type", documentType);
     if (dateFrom) {
       summaryQuery = summaryQuery.gte("created_at", dateFrom);
     }
@@ -59,13 +60,13 @@ Deno.serve(async (req: Request) => {
       (inv: { status?: string }) => inv.status === "pending" || inv.status === "flagged",
     ).length;
     const approvedCount = allInvoices.filter(
-      (inv: { status?: string }) => inv.status === "approved",
+      (inv: { status?: string }) => inv.status === "approved" || inv.status === "synced",
     ).length;
     const amountAwaitingApproval = allInvoices
       .filter((inv: { status?: string }) => inv.status === "pending" || inv.status === "flagged")
       .reduce((sum: number, inv: { total?: number }) => sum + (inv.total || 0), 0);
     const amountApproved = allInvoices
-      .filter((inv: { status?: string }) => inv.status === "approved")
+      .filter((inv: { status?: string }) => inv.status === "approved" || inv.status === "synced")
       .reduce((sum: number, inv: { total?: number }) => sum + (inv.total || 0), 0);
     const failedProcessing = allInvoices.filter(
       (inv: { status?: string }) => inv.status === "error",
@@ -76,9 +77,10 @@ Deno.serve(async (req: Request) => {
     let invoiceQuery = supabase
       .from("invoices")
       .select(
-        "id, customer_id, vendor_id, invoice_number, invoice_date, due_date, currency, total, status, is_valid, confidence, created_at, vendors(name)",
+        "id, customer_id, vendor_id, invoice_number, invoice_date, due_date, currency, total, status, is_valid, confidence, document_type, created_at, vendors(name)",
         { count: "exact" },
-      );
+      )
+      .eq("document_type", documentType);
 
     if (customerFilter) {
       invoiceQuery = invoiceQuery.eq("customer_id", customerFilter);

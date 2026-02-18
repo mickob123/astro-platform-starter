@@ -3,7 +3,7 @@ export const prerender = false;
 import DashboardLayout from '../layouts/DashboardLayout.astro';
 ---
 
-<DashboardLayout title="Dashboard">
+<DashboardLayout title="Expenses">
   <!-- ===== Summary Stats Cards (4 cards) ===== -->
   <div id="stats-section" class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-2">
     <div class="card bg-base-100 shadow-sm">
@@ -43,53 +43,6 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   <!-- ===== All-time total line ===== -->
   <p id="stat-total-line" class="text-sm opacity-50 mt-2 mb-4 text-center"></p>
 
-  <!-- ===== Analytics Charts ===== -->
-  <details class="collapse collapse-arrow bg-base-100 shadow-sm mb-4" id="analytics-section">
-    <summary class="collapse-title font-semibold text-sm">Analytics &amp; Insights</summary>
-    <div class="collapse-content">
-      <div id="analytics-loading" class="flex items-center justify-center py-8 hidden">
-        <span class="loading loading-spinner loading-md text-primary"></span>
-        <span class="ml-3 text-sm opacity-60">Loading analytics...</span>
-      </div>
-      <div id="analytics-error" class="hidden text-center py-8">
-        <p class="text-sm opacity-50">Analytics coming soon.</p>
-      </div>
-      <div id="analytics-content" class="hidden">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4">
-          <!-- Invoice Volume Chart -->
-          <div>
-            <h3 class="text-sm font-semibold mb-3 opacity-60">Invoice Volume (Last 30 Days)</h3>
-            <canvas id="chart-volume" height="200"></canvas>
-          </div>
-          <!-- Spend by Vendor Chart -->
-          <div>
-            <h3 class="text-sm font-semibold mb-3 opacity-60">Top Vendors by Spend</h3>
-            <canvas id="chart-vendors" height="200"></canvas>
-          </div>
-          <!-- Status Breakdown Chart -->
-          <div>
-            <h3 class="text-sm font-semibold mb-3 opacity-60">Status Breakdown</h3>
-            <canvas id="chart-status" height="200"></canvas>
-          </div>
-          <!-- Quick Stats -->
-          <div>
-            <h3 class="text-sm font-semibold mb-3 opacity-60">Processing Performance</h3>
-            <div class="stats stats-vertical shadow w-full">
-              <div class="stat">
-                <div class="stat-title">Avg Confidence Score</div>
-                <div class="stat-value text-lg" id="stat-avg-confidence">--</div>
-              </div>
-              <div class="stat">
-                <div class="stat-title">Avg Processing Time</div>
-                <div class="stat-value text-lg" id="stat-avg-processing">--</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </details>
-
   <!-- ===== Time Range Preset Buttons ===== -->
   <div class="flex flex-wrap gap-2 mb-4" id="time-range-buttons">
     <button class="btn btn-sm" data-range="today">Today</button>
@@ -101,9 +54,8 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   <!-- ===== Filters & Search Bar ===== -->
   <div class="card bg-base-100 shadow-sm mb-6">
     <div class="card-body p-4">
-      <!-- Mobile: 2-col grid for compact filters. Desktop: flex row -->
       <div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-3 items-start sm:items-end">
-        <!-- Search (full width on all) -->
+        <!-- Search -->
         <div class="form-control col-span-2 sm:flex-1 sm:min-w-[180px]">
           <label class="label py-1">
             <span class="label-text text-xs font-semibold uppercase tracking-wide opacity-60">Search</span>
@@ -111,7 +63,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
           <input
             id="filter-search"
             type="text"
-            placeholder="Search vendor or invoice #..."
+            placeholder="Search vendor or receipt #..."
             class="input input-bordered input-sm w-full"
           />
         </div>
@@ -167,13 +119,13 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     </div>
   </div>
 
-  <!-- ===== Invoice Table ===== -->
+  <!-- ===== Expense Table ===== -->
   <div class="card bg-base-100 shadow-sm">
     <div class="card-body p-0">
       <!-- Loading state -->
       <div id="table-loading" class="flex flex-col items-center justify-center py-16">
         <span class="loading loading-spinner loading-lg text-primary"></span>
-        <p class="mt-3 text-sm opacity-60">Loading invoices...</p>
+        <p class="mt-3 text-sm opacity-60">Loading expenses...</p>
       </div>
 
       <!-- Error state -->
@@ -181,7 +133,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
         <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-error mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
         </svg>
-        <p class="font-semibold text-error">Failed to load invoices</p>
+        <p class="font-semibold text-error">Failed to load expenses</p>
         <p id="table-error-message" class="text-sm opacity-60 mt-1"></p>
         <button id="retry-btn" class="btn btn-sm btn-primary mt-4 no-underline">Retry</button>
       </div>
@@ -191,8 +143,8 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
         <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 opacity-30 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
-        <p class="font-semibold">No invoices found</p>
-        <p class="text-sm opacity-60 mt-1">Try adjusting your filters or search term.</p>
+        <p class="font-semibold">No expenses found</p>
+        <p class="text-sm opacity-60 mt-1">Expenses from emails (receipts, subscriptions) will appear here automatically.</p>
       </div>
 
       <!-- Table -->
@@ -201,17 +153,17 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
           <thead>
             <tr class="border-b border-base-200">
               <th class="w-10 admin-only"><input type="checkbox" id="select-all" class="checkbox checkbox-sm" /></th>
-              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Invoice #</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Receipt #</th>
               <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Vendor</th>
               <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Amount</th>
               <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden sm:table-cell">Date</th>
-              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden md:table-cell">Due Date</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden md:table-cell">Payment Date</th>
               <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Status</th>
               <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden lg:table-cell">Confidence</th>
               <th class="text-xs uppercase tracking-wide opacity-60 font-semibold admin-only">Actions</th>
             </tr>
           </thead>
-          <tbody id="invoice-table-body">
+          <tbody id="expense-table-body">
             <!-- Populated by JS -->
           </tbody>
         </table>
@@ -252,34 +204,22 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
       </button>
     </div>
   </div>
-
-  <!-- ===== Activity Feed ===== -->
-  <details class="collapse collapse-arrow bg-base-100 shadow-sm mt-6">
-    <summary class="collapse-title text-sm font-semibold">Recent Activity</summary>
-    <div class="collapse-content" id="activity-feed">
-      <p class="text-sm opacity-50 py-2">Activity feed coming soon.</p>
-    </div>
-  </details>
 </DashboardLayout>
 
 <style>
-  /* Make table rows clickable-looking */
-  #invoice-table-body tr {
+  #expense-table-body tr {
     cursor: pointer;
     transition: background-color 0.15s ease;
   }
-  #invoice-table-body tr:hover {
+  #expense-table-body tr:hover {
     background-color: oklch(var(--b2));
   }
-  /* Vendor group header rows should not look clickable */
-  #invoice-table-body tr.vendor-group-header {
+  #expense-table-body tr.vendor-group-header {
     cursor: default;
   }
-  /* Remove default anchor underline from rows */
-  #invoice-table-body tr a {
+  #expense-table-body tr a {
     text-decoration: none;
   }
-  /* Smooth fade-in for content */
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }
@@ -305,8 +245,8 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   let currentSort = 'date-desc';
   let currentSearch = '';
   let currentDateFrom = '';
-  let allInvoices: any[] = [];
-  let selectedInvoices: Set<string> = new Set();
+  let allExpenses: any[] = [];
+  let selectedExpenses: Set<string> = new Set();
   let vendorGroupMode = false;
   let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -327,7 +267,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   const tableErrorMessage = document.getElementById('table-error-message')!;
   const tableEmpty = document.getElementById('table-empty')!;
   const tableContainer = document.getElementById('table-container')!;
-  const tableBody = document.getElementById('invoice-table-body')!;
+  const tableBody = document.getElementById('expense-table-body')!;
   const retryBtn = document.getElementById('retry-btn')!;
 
   const paginationSection = document.getElementById('pagination-section')!;
@@ -418,8 +358,8 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     return await getAccessToken();
   }
 
-  // ─── API Fetch ────────────────────────────────────────────────────
-  async function fetchDashboard(): Promise<any> {
+  // ─── API Fetch (expense-specific: document_type=expense) ─────────
+  async function fetchExpenses(): Promise<any> {
     const token = await getAuthToken();
     if (!token) {
       window.location.href = '/login';
@@ -429,7 +369,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     const params = new URLSearchParams();
     params.set('page', String(currentPage));
     params.set('limit', String(currentLimit));
-    params.set('document_type', 'invoice');
+    params.set('document_type', 'expense');
     if (currentStatus) params.set('status', currentStatus);
     if (currentDateFrom) params.set('date_from', currentDateFrom);
 
@@ -452,7 +392,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   }
 
   // ─── Approve/Reject API ───────────────────────────────────────────
-  async function callApproveEndpoint(invoiceId: string, action: 'approve' | 'reject'): Promise<void> {
+  async function callApproveEndpoint(expenseId: string, action: 'approve' | 'reject'): Promise<void> {
     const token = await getAuthToken();
     if (!token) {
       window.location.href = '/login';
@@ -465,7 +405,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ invoice_id: invoiceId, action }),
+      body: JSON.stringify({ invoice_id: expenseId, action }),
     });
 
     if (!response.ok) {
@@ -474,10 +414,10 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     }
   }
 
-  // ─── Bulk Action API (single request for multiple invoices) ────────
+  // ─── Bulk Action API ──────────────────────────────────────────────
   async function callBulkActionEndpoint(
     action: 'approve' | 'reject' | 'delete' | 'export_csv',
-    invoiceIds: string[]
+    expenseIds: string[]
   ): Promise<Response> {
     const token = await getAuthToken();
     if (!token) {
@@ -491,7 +431,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ action, invoice_ids: invoiceIds }),
+      body: JSON.stringify({ action, invoice_ids: expenseIds }),
     });
 
     if (!response.ok) {
@@ -513,13 +453,11 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     toast.innerHTML = `<span>${escapeHtml(message)}</span>`;
     toastContainer.appendChild(toast);
 
-    // Trigger entrance animation
     requestAnimationFrame(() => {
       toast.classList.remove('opacity-0', 'translate-y-2');
       toast.classList.add('opacity-100', 'translate-y-0');
     });
 
-    // Auto-dismiss after 4 seconds
     setTimeout(() => {
       toast.classList.remove('opacity-100', 'translate-y-0');
       toast.classList.add('opacity-0', 'translate-y-2');
@@ -528,32 +466,30 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   }
 
   // ─── Quick Action (single row approve/reject) ─────────────────────
-  (window as any).quickAction = async function(invoiceId: string, action: 'approve' | 'reject') {
+  (window as any).quickAction = async function(expenseId: string, action: 'approve' | 'reject') {
     try {
-      await callApproveEndpoint(invoiceId, action);
-      await loadDashboard();
+      await callApproveEndpoint(expenseId, action);
+      await loadExpenses();
     } catch (err: any) {
       console.error('Quick action error:', err);
-      alert(`Failed to ${action} invoice: ${err.message}`);
+      alert(`Failed to ${action} expense: ${err.message}`);
     }
   };
 
   // ─── Client-Side Sorting & Filtering ──────────────────────────────
-  function applyClientFilters(invoices: any[]): any[] {
-    let filtered = [...invoices];
+  function applyClientFilters(expenses: any[]): any[] {
+    let filtered = [...expenses];
 
-    // Search filter (client-side, across vendor_id and invoice_number)
     if (currentSearch.trim()) {
       const term = currentSearch.trim().toLowerCase();
-      filtered = filtered.filter((inv) => {
-        const invoiceNum = (inv.invoice_number || '').toLowerCase();
-        const vendorId = (inv.vendor_id || '').toLowerCase();
-        const vendorName = (inv.vendor_name || inv.vendors?.name || '').toLowerCase();
-        return invoiceNum.includes(term) || vendorId.includes(term) || vendorName.includes(term);
+      filtered = filtered.filter((exp) => {
+        const receiptNum = (exp.invoice_number || '').toLowerCase();
+        const vendorId = (exp.vendor_id || '').toLowerCase();
+        const vendorName = (exp.vendor_name || exp.vendors?.name || '').toLowerCase();
+        return receiptNum.includes(term) || vendorId.includes(term) || vendorName.includes(term);
       });
     }
 
-    // Sort
     filtered.sort((a, b) => {
       switch (currentSort) {
         case 'date-asc':
@@ -574,7 +510,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
 
   // ─── Checkbox / Bulk Selection Helpers ─────────────────────────────
   function updateBulkUI() {
-    const count = selectedInvoices.size;
+    const count = selectedExpenses.size;
     if (count > 0) {
       bulkActions.classList.remove('hidden');
       bulkActions.style.display = 'flex';
@@ -590,14 +526,13 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     checkboxes.forEach((cb) => {
       cb.addEventListener('change', (e) => {
         e.stopPropagation();
-        const id = cb.dataset.invoiceId!;
+        const id = cb.dataset.expenseId!;
         if (cb.checked) {
-          selectedInvoices.add(id);
+          selectedExpenses.add(id);
         } else {
-          selectedInvoices.delete(id);
+          selectedExpenses.delete(id);
         }
-        // Update select-all state
-        selectAllCheckbox.checked = checkboxes.length > 0 && selectedInvoices.size === checkboxes.length;
+        selectAllCheckbox.checked = checkboxes.length > 0 && selectedExpenses.size === checkboxes.length;
         updateBulkUI();
       });
     });
@@ -610,52 +545,48 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     statAmountAwaiting.textContent = formatCurrency(summary.amount_awaiting_approval);
     statAmountApproved.textContent = formatCurrency(summary.amount_approved);
 
-    // All-time total line
-    const totalInvoices = summary.total_invoices ?? 0;
-    statTotalLine.textContent = `${totalInvoices} invoice${totalInvoices !== 1 ? 's' : ''} processed all-time`;
+    const totalExpenses = summary.total_invoices ?? 0;
+    statTotalLine.textContent = `${totalExpenses} expense${totalExpenses !== 1 ? 's' : ''} processed all-time`;
 
-    // Notify the nav bell about failed processing count
     const failedProcessing = summary.failed_processing ?? 0;
     window.dispatchEvent(new CustomEvent('dashboard:notifications', {
       detail: { failedCount: failedProcessing }
     }));
 
-    // Animate in
     document.getElementById('stats-section')?.classList.add('fade-in');
   }
 
-  function buildInvoiceRow(inv: any): string {
-    const conf = formatConfidence(inv.confidence);
-    const vendorDisplay = inv.vendors?.name || inv.vendor_name || '--';
-    const isPendingOrFlagged = inv.status === 'pending' || inv.status === 'flagged';
-    const isChecked = selectedInvoices.has(inv.id) ? 'checked' : '';
+  function buildExpenseRow(exp: any): string {
+    const conf = formatConfidence(exp.confidence);
+    const vendorDisplay = exp.vendors?.name || exp.vendor_name || '--';
+    const isPendingOrFlagged = exp.status === 'pending' || exp.status === 'flagged';
+    const isChecked = selectedExpenses.has(exp.id) ? 'checked' : '';
 
     const actionsHtml = isPendingOrFlagged
       ? `<td class="admin-only"><div class="flex gap-1">
-           <button onclick="event.stopPropagation(); quickAction('${inv.id}', 'approve')" class="btn btn-xs btn-success btn-outline" title="Approve">\u2713</button>
-           <button onclick="event.stopPropagation(); quickAction('${inv.id}', 'reject')" class="btn btn-xs btn-error btn-outline" title="Reject">\u2717</button>
+           <button onclick="event.stopPropagation(); quickAction('${exp.id}', 'approve')" class="btn btn-xs btn-success btn-outline" title="Approve">\u2713</button>
+           <button onclick="event.stopPropagation(); quickAction('${exp.id}', 'reject')" class="btn btn-xs btn-error btn-outline" title="Reject">\u2717</button>
          </div></td>`
       : `<td class="admin-only"></td>`;
 
     return `
-      <tr onclick="window.location.href='/invoice/${inv.id}'" class="border-b border-base-200/50 hover:bg-base-200/50 cursor-pointer transition-colors">
-        <td onclick="event.stopPropagation()" class="admin-only"><input type="checkbox" class="checkbox checkbox-sm row-checkbox" data-invoice-id="${inv.id}" ${isChecked} /></td>
-        <td class="font-mono text-sm font-medium">${escapeHtml(inv.invoice_number || '--')}</td>
+      <tr onclick="window.location.href='/invoice/${exp.id}'" class="border-b border-base-200/50 hover:bg-base-200/50 cursor-pointer transition-colors">
+        <td onclick="event.stopPropagation()" class="admin-only"><input type="checkbox" class="checkbox checkbox-sm row-checkbox" data-expense-id="${exp.id}" ${isChecked} /></td>
+        <td class="font-mono text-sm font-medium">${escapeHtml(exp.invoice_number || '--')}</td>
         <td class="max-w-[120px] sm:max-w-[200px] truncate">${escapeHtml(vendorDisplay)}</td>
-        <td class="font-mono font-medium">${formatCurrency(inv.total)}</td>
-        <td class="hidden sm:table-cell text-sm">${formatDate(inv.invoice_date)}</td>
-        <td class="hidden md:table-cell text-sm">${formatDate(inv.due_date)}</td>
-        <td><div class="flex flex-wrap items-center gap-0.5">${getStatusBadge(inv.status || 'pending')}${inv.status === 'approved' ? getSyncBadge(inv.sync_status) : ''}</div></td>
+        <td class="font-mono font-medium">${formatCurrency(exp.total)}</td>
+        <td class="hidden sm:table-cell text-sm">${formatDate(exp.invoice_date)}</td>
+        <td class="hidden md:table-cell text-sm">${formatDate(exp.due_date || exp.invoice_date)}</td>
+        <td><div class="flex flex-wrap items-center gap-0.5">${getStatusBadge(exp.status || 'pending')}${exp.status === 'approved' ? getSyncBadge(exp.sync_status) : ''}</div></td>
         <td class="hidden lg:table-cell"><span class="${conf.class}">${conf.text}</span></td>
         ${actionsHtml}
       </tr>
     `;
   }
 
-  function renderTable(invoices: any[]) {
-    const filtered = applyClientFilters(invoices);
+  function renderTable(expenses: any[]) {
+    const filtered = applyClientFilters(expenses);
 
-    // Show/hide states
     tableLoading.classList.add('hidden');
     tableLoading.style.display = 'none';
     tableError.classList.add('hidden');
@@ -676,31 +607,29 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     if (vendorGroupMode) {
       renderVendorGroupedTable(filtered);
     } else {
-      tableBody.innerHTML = filtered.map((inv) => buildInvoiceRow(inv)).join('');
+      tableBody.innerHTML = filtered.map((exp) => buildExpenseRow(exp)).join('');
     }
 
     bindCheckboxEvents();
     updateBulkUI();
   }
 
-  function renderVendorGroupedTable(invoices: any[]) {
-    // Group by vendor
+  function renderVendorGroupedTable(expenses: any[]) {
     const groups: Record<string, any[]> = {};
-    for (const inv of invoices) {
-      const vendor = inv.vendors?.name || inv.vendor_name || 'Unknown Vendor';
+    for (const exp of expenses) {
+      const vendor = exp.vendors?.name || exp.vendor_name || 'Unknown Vendor';
       if (!groups[vendor]) groups[vendor] = [];
-      groups[vendor].push(inv);
+      groups[vendor].push(exp);
     }
 
-    // Sort vendor names alphabetically
     const sortedVendors = Object.keys(groups).sort((a, b) => a.localeCompare(b));
 
     let html = '';
     for (const vendor of sortedVendors) {
-      const vendorInvoices = groups[vendor];
-      const vendorTotal = vendorInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
-      html += `<tr class="bg-base-200 vendor-group-header"><td colspan="9" class="font-bold">${escapeHtml(vendor)} (${vendorInvoices.length} invoice${vendorInvoices.length !== 1 ? 's' : ''} - ${formatCurrency(vendorTotal)})</td></tr>`;
-      html += vendorInvoices.map((inv) => buildInvoiceRow(inv)).join('');
+      const vendorExpenses = groups[vendor];
+      const vendorTotal = vendorExpenses.reduce((sum, exp) => sum + (exp.total || 0), 0);
+      html += `<tr class="bg-base-200 vendor-group-header"><td colspan="9" class="font-bold">${escapeHtml(vendor)} (${vendorExpenses.length} expense${vendorExpenses.length !== 1 ? 's' : ''} - ${formatCurrency(vendorTotal)})</td></tr>`;
+      html += vendorExpenses.map((exp) => buildExpenseRow(exp)).join('');
     }
 
     tableBody.innerHTML = html;
@@ -719,13 +648,11 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     const start = (page - 1) * limit + 1;
     const end = Math.min(page * limit, total);
 
-    paginationInfo.textContent = `Showing ${start}-${end} of ${total} invoices`;
+    paginationInfo.textContent = `Showing ${start}-${end} of ${total} expenses`;
 
-    // Prev/Next buttons
     pagePrev.disabled = page <= 1;
     pageNext.disabled = page >= total_pages;
 
-    // Generate page number buttons
     const pages = generatePageNumbers(page, total_pages);
     pageNumbers.innerHTML = pages
       .map((p) => {
@@ -737,13 +664,12 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
       })
       .join('');
 
-    // Attach page number click handlers
     pageNumbers.querySelectorAll('button[data-page]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const targetPage = parseInt((btn as HTMLElement).dataset.page || '1', 10);
         if (targetPage !== currentPage) {
           currentPage = targetPage;
-          loadDashboard();
+          loadExpenses();
         }
       });
     });
@@ -755,20 +681,14 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     }
 
     const pages: (number | string)[] = [1];
-
     if (current > 3) pages.push('...');
-
     const rangeStart = Math.max(2, current - 1);
     const rangeEnd = Math.min(total - 1, current + 1);
-
     for (let i = rangeStart; i <= rangeEnd; i++) {
       pages.push(i);
     }
-
     if (current < total - 2) pages.push('...');
-
     pages.push(total);
-
     return pages;
   }
 
@@ -808,9 +728,8 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
         return start.toISOString();
       }
       case 'week': {
-        // Start of this week (Monday)
         const day = now.getDay();
-        const diff = day === 0 ? 6 : day - 1; // Monday = 0 offset
+        const diff = day === 0 ? 6 : day - 1;
         const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff);
         return start.toISOString();
       }
@@ -836,11 +755,10 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
 
   // ─── CSV Export ───────────────────────────────────────────────────
   async function exportCsv() {
-    // If invoices are selected, use the server-side bulk export for full-fidelity CSV
-    if (selectedInvoices.size > 0) {
-      const ids = Array.from(selectedInvoices);
+    if (selectedExpenses.size > 0) {
+      const ids = Array.from(selectedExpenses);
       try {
-        showToast(`Exporting ${ids.length} selected invoice${ids.length !== 1 ? 's' : ''}...`, 'info');
+        showToast(`Exporting ${ids.length} selected expense${ids.length !== 1 ? 's' : ''}...`, 'info');
         const response = await callBulkActionEndpoint('export_csv', ids);
         const csvText = await response.text();
 
@@ -848,13 +766,13 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `invoices-export-${new Date().toISOString().slice(0, 10)}.csv`;
+        link.download = `expenses-export-${new Date().toISOString().slice(0, 10)}.csv`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
 
-        showToast(`Exported ${ids.length} invoice${ids.length !== 1 ? 's' : ''} successfully.`, 'success');
+        showToast(`Exported ${ids.length} expense${ids.length !== 1 ? 's' : ''} successfully.`, 'success');
       } catch (err: any) {
         console.error('Server CSV export error:', err);
         showToast(`CSV export failed: ${err.message}`, 'error');
@@ -862,23 +780,21 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
       return;
     }
 
-    // Fall back to client-side export for the current filtered view
-    const filtered = applyClientFilters(allInvoices);
-    const headers = ['invoice_number', 'vendor', 'amount', 'date', 'due_date', 'status', 'confidence'];
-    const rows = filtered.map((inv) => {
-      const vendor = inv.vendors?.name || inv.vendor_name || '';
-      const amount = inv.total != null ? String(inv.total) : '';
-      const date = inv.invoice_date || '';
-      const dueDate = inv.due_date || '';
-      const status = inv.status || '';
-      const confidence = inv.confidence != null ? String(Math.round(inv.confidence * 100)) + '%' : '';
-      return [inv.invoice_number || '', vendor, amount, date, dueDate, status, confidence];
+    const filtered = applyClientFilters(allExpenses);
+    const headers = ['receipt_number', 'vendor', 'amount', 'date', 'payment_date', 'status', 'confidence'];
+    const rows = filtered.map((exp) => {
+      const vendor = exp.vendors?.name || exp.vendor_name || '';
+      const amount = exp.total != null ? String(exp.total) : '';
+      const date = exp.invoice_date || '';
+      const paymentDate = exp.due_date || exp.invoice_date || '';
+      const status = exp.status || '';
+      const confidence = exp.confidence != null ? String(Math.round(exp.confidence * 100)) + '%' : '';
+      return [exp.invoice_number || '', vendor, amount, date, paymentDate, status, confidence];
     });
 
     let csvContent = headers.join(',') + '\n';
     for (const row of rows) {
       csvContent += row.map((cell) => {
-        // Escape cells containing commas, quotes, or newlines
         const escaped = String(cell).replace(/"/g, '""');
         return `"${escaped}"`;
       }).join(',') + '\n';
@@ -888,7 +804,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `invoices-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `expenses-export-${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -896,426 +812,152 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   }
 
   // ─── Main Load Function ───────────────────────────────────────────
-  async function loadDashboard() {
+  async function loadExpenses() {
     showLoading();
 
     try {
-      const data = await fetchDashboard();
+      const data = await fetchExpenses();
 
       renderStats(data.summary);
 
-      allInvoices = data.invoices || [];
-      renderTable(allInvoices);
+      allExpenses = data.invoices || [];
+      renderTable(allExpenses);
       renderPagination(data.pagination);
     } catch (err: any) {
-      console.error('Dashboard load error:', err);
+      console.error('Expenses load error:', err);
       showError(err.message || 'An unexpected error occurred.');
     }
   }
 
   // ─── Bulk Action Handlers ─────────────────────────────────────────
   async function executeBulkAction(action: 'approve' | 'reject' | 'delete') {
-    if (selectedInvoices.size === 0) return;
+    if (selectedExpenses.size === 0) return;
 
-    const ids = Array.from(selectedInvoices);
+    const ids = Array.from(selectedExpenses);
     const actionLabel = action === 'delete' ? 'delete' : action;
-    const confirmMsg = `Are you sure you want to ${actionLabel} ${ids.length} invoice${ids.length !== 1 ? 's' : ''}?`;
+    const confirmMsg = `Are you sure you want to ${actionLabel} ${ids.length} expense${ids.length !== 1 ? 's' : ''}?`;
     if (!confirm(confirmMsg)) return;
 
     try {
       const response = await callBulkActionEndpoint(action, ids);
       const result = await response.json();
 
-      selectedInvoices.clear();
+      selectedExpenses.clear();
       selectAllCheckbox.checked = false;
       updateBulkUI();
 
-      // Show feedback via toast
       if (result.errors && result.errors.length > 0) {
         showToast(
-          `${result.processed} invoice${result.processed !== 1 ? 's' : ''} ${actionLabel}d. ${result.errors.length} failed.`,
+          `${result.processed} expense${result.processed !== 1 ? 's' : ''} ${actionLabel}d. ${result.errors.length} failed.`,
           result.processed > 0 ? 'info' : 'error'
         );
       } else {
         showToast(
-          `${result.processed} invoice${result.processed !== 1 ? 's' : ''} ${actionLabel}d successfully.`,
+          `${result.processed} expense${result.processed !== 1 ? 's' : ''} ${actionLabel}d successfully.`,
           'success'
         );
       }
 
-      await loadDashboard();
+      await loadExpenses();
     } catch (err: any) {
       console.error(`Bulk ${action} error:`, err);
-      showToast(`Failed to ${actionLabel} invoices: ${err.message}`, 'error');
-      await loadDashboard();
+      showToast(`Failed to ${actionLabel} expenses: ${err.message}`, 'error');
+      await loadExpenses();
     }
   }
 
   // ─── Event Listeners ─────────────────────────────────────────────
 
-  // Time range buttons
   timeRangeButtons.querySelectorAll('button').forEach((btn) => {
     btn.addEventListener('click', () => {
       const range = (btn as HTMLElement).dataset.range || 'all';
       currentDateFrom = computeDateFrom(range);
       setActiveRangeButton(range);
       currentPage = 1;
-      loadDashboard();
+      loadExpenses();
     });
   });
 
-  // Status filter -> triggers API call (server-side filter)
   filterStatus.addEventListener('change', () => {
     currentStatus = filterStatus.value;
     currentPage = 1;
-    loadDashboard();
+    loadExpenses();
   });
 
-  // Per-page limit -> triggers API call
   filterLimit.addEventListener('change', () => {
     currentLimit = parseInt(filterLimit.value, 10);
     currentPage = 1;
-    loadDashboard();
+    loadExpenses();
   });
 
-  // Search -> client-side filter with debounce
   filterSearch.addEventListener('input', () => {
     if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
     searchDebounceTimer = setTimeout(() => {
       currentSearch = filterSearch.value;
-      renderTable(allInvoices);
+      renderTable(allExpenses);
     }, 250);
   });
 
-  // Sort -> client-side re-sort
   filterSort.addEventListener('change', () => {
     currentSort = filterSort.value;
-    renderTable(allInvoices);
+    renderTable(allExpenses);
   });
 
-  // Pagination prev/next
   pagePrev.addEventListener('click', () => {
     if (currentPage > 1) {
       currentPage--;
-      loadDashboard();
+      loadExpenses();
     }
   });
 
   pageNext.addEventListener('click', () => {
     currentPage++;
-    loadDashboard();
+    loadExpenses();
   });
 
-  // Retry on error
   retryBtn.addEventListener('click', () => {
-    loadDashboard();
+    loadExpenses();
   });
 
-  // Select All checkbox
   selectAllCheckbox.addEventListener('change', () => {
     const checkboxes = tableBody.querySelectorAll<HTMLInputElement>('.row-checkbox');
     checkboxes.forEach((cb) => {
       cb.checked = selectAllCheckbox.checked;
-      const id = cb.dataset.invoiceId!;
+      const id = cb.dataset.expenseId!;
       if (selectAllCheckbox.checked) {
-        selectedInvoices.add(id);
+        selectedExpenses.add(id);
       } else {
-        selectedInvoices.delete(id);
+        selectedExpenses.delete(id);
       }
     });
     updateBulkUI();
   });
 
-  // Bulk action buttons
   bulkApproveBtn.addEventListener('click', () => executeBulkAction('approve'));
   bulkRejectBtn.addEventListener('click', () => executeBulkAction('reject'));
   bulkDeleteBtn.addEventListener('click', () => executeBulkAction('delete'));
   bulkCancelBtn.addEventListener('click', () => {
-    selectedInvoices.clear();
+    selectedExpenses.clear();
     selectAllCheckbox.checked = false;
     const checkboxes = tableBody.querySelectorAll<HTMLInputElement>('.row-checkbox');
     checkboxes.forEach((cb) => { cb.checked = false; });
     updateBulkUI();
   });
 
-  // CSV Export
   exportCsvBtn.addEventListener('click', () => { exportCsv(); });
 
-  // Vendor Group Toggle
   toggleVendorGroupBtn.addEventListener('click', () => {
     vendorGroupMode = !vendorGroupMode;
     toggleVendorGroupBtn.classList.toggle('btn-active', vendorGroupMode);
-    renderTable(allInvoices);
+    renderTable(allExpenses);
   });
 
-  // ─── Analytics: Chart.js Loader ──────────────────────────────────
-  async function loadChartJs(): Promise<any> {
-    if ((window as any).Chart) return (window as any).Chart;
-    return new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
-      script.onload = () => resolve((window as any).Chart);
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
-  }
-
-  // ─── Analytics: Data Fetching ──────────────────────────────────
-  let analyticsCache: any = null;
-  let analyticsChartInstances: any[] = [];
-
-  async function fetchAnalytics() {
-    const token = await getAuthToken();
-    if (!token) return null;
-
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const params = new URLSearchParams({
-      date_from: thirtyDaysAgo.toISOString(),
-      date_to: new Date().toISOString()
-    });
-
-    const res = await fetch(`${FUNCTIONS_URL}/admin-get-analytics?${params}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (!res.ok) return null;
-    return res.json();
-  }
-
-  // ─── Analytics: Chart Color Schemes ────────────────────────────
-  const CHART_COLORS = {
-    primary: '#570df8',
-    success: '#36d399',
-    warning: '#fbbd23',
-    error: '#f87272',
-    info: '#3abff8',
-  };
-
-  const STATUS_COLOR_MAP: Record<string, string> = {
-    pending: CHART_COLORS.warning,
-    approved: CHART_COLORS.success,
-    flagged: CHART_COLORS.error,
-    rejected: '#a8a8a8',
-    synced: CHART_COLORS.info,
-    error: CHART_COLORS.error,
-  };
-
-  // ─── Analytics: Rendering ──────────────────────────────────────
-  function renderAnalyticsCharts(data: any, Chart: any) {
-    // Destroy any existing chart instances to prevent canvas reuse issues
-    for (const chart of analyticsChartInstances) {
-      chart.destroy();
-    }
-    analyticsChartInstances = [];
-
-    const analyticsContent = document.getElementById('analytics-content')!;
-    analyticsContent.classList.remove('hidden');
-
-    // --- Volume Chart (Line) ---
-    const volumeCtx = (document.getElementById('chart-volume') as HTMLCanvasElement)?.getContext('2d');
-    if (volumeCtx && data.volume_by_day) {
-      const labels = data.volume_by_day.map((d: any) => {
-        const date = new Date(d.date);
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      });
-      const values = data.volume_by_day.map((d: any) => d.count);
-
-      const volumeChart = new Chart(volumeCtx, {
-        type: 'line',
-        data: {
-          labels,
-          datasets: [{
-            label: 'Invoices',
-            data: values,
-            borderColor: CHART_COLORS.primary,
-            backgroundColor: CHART_COLORS.primary + '20',
-            fill: true,
-            tension: 0.3,
-            pointRadius: 2,
-            pointHoverRadius: 5,
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false },
-          },
-          scales: {
-            y: {
-              beginAtZero: true,
-              ticks: { precision: 0 },
-              grid: { color: 'rgba(0,0,0,0.05)' },
-            },
-            x: {
-              grid: { display: false },
-              ticks: { maxTicksLimit: 10 },
-            }
-          }
-        }
-      });
-      analyticsChartInstances.push(volumeChart);
-    }
-
-    // --- Vendors Chart (Horizontal Bar) ---
-    const vendorsCtx = (document.getElementById('chart-vendors') as HTMLCanvasElement)?.getContext('2d');
-    if (vendorsCtx && data.spend_by_vendor) {
-      const vendorLabels = data.spend_by_vendor.map((v: any) => {
-        const name = v.vendor_name || 'Unknown';
-        return name.length > 20 ? name.substring(0, 20) + '...' : name;
-      });
-      const vendorValues = data.spend_by_vendor.map((v: any) => v.total_amount || 0);
-
-      const vendorsChart = new Chart(vendorsCtx, {
-        type: 'bar',
-        data: {
-          labels: vendorLabels,
-          datasets: [{
-            label: 'Total Spend',
-            data: vendorValues,
-            backgroundColor: CHART_COLORS.info + 'CC',
-            borderColor: CHART_COLORS.info,
-            borderWidth: 1,
-            borderRadius: 3,
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          indexAxis: 'y',
-          plugins: {
-            legend: { display: false },
-            tooltip: {
-              callbacks: {
-                label: (ctx: any) => {
-                  return ' $' + Number(ctx.raw).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                }
-              }
-            }
-          },
-          scales: {
-            x: {
-              beginAtZero: true,
-              grid: { color: 'rgba(0,0,0,0.05)' },
-              ticks: {
-                callback: (value: any) => '$' + Number(value).toLocaleString('en-US', { notation: 'compact' } as any),
-              }
-            },
-            y: {
-              grid: { display: false },
-            }
-          }
-        }
-      });
-      analyticsChartInstances.push(vendorsChart);
-    }
-
-    // --- Status Chart (Doughnut) ---
-    const statusCtx = (document.getElementById('chart-status') as HTMLCanvasElement)?.getContext('2d');
-    if (statusCtx && data.status_breakdown) {
-      const statusLabels = data.status_breakdown.map((s: any) =>
-        (s.status || 'unknown').charAt(0).toUpperCase() + (s.status || 'unknown').slice(1)
-      );
-      const statusValues = data.status_breakdown.map((s: any) => s.count);
-      const statusColors = data.status_breakdown.map((s: any) =>
-        STATUS_COLOR_MAP[s.status] || '#d1d5db'
-      );
-
-      const statusChart = new Chart(statusCtx, {
-        type: 'doughnut',
-        data: {
-          labels: statusLabels,
-          datasets: [{
-            data: statusValues,
-            backgroundColor: statusColors,
-            borderWidth: 2,
-            borderColor: '#fff',
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              position: 'bottom',
-              labels: { padding: 12, usePointStyle: true, pointStyle: 'circle' },
-            },
-          },
-          cutout: '55%',
-        }
-      });
-      analyticsChartInstances.push(statusChart);
-    }
-
-    // --- Quick Stats ---
-    if (data.avg_confidence != null) {
-      const avgConfEl = document.getElementById('stat-avg-confidence');
-      if (avgConfEl) {
-        avgConfEl.textContent = Math.round(data.avg_confidence * 100) + '%';
-      }
-    }
-    if (data.avg_processing_time_ms != null) {
-      const avgProcEl = document.getElementById('stat-avg-processing');
-      if (avgProcEl) {
-        const seconds = Number(data.avg_processing_time_ms) / 1000;
-        avgProcEl.textContent = seconds < 60
-          ? seconds.toFixed(1) + 's'
-          : (seconds / 60).toFixed(1) + 'min';
-      }
-    }
-  }
-
-  // ─── Analytics: Toggle Handler (Lazy Load) ─────────────────────
-  const analyticsSection = document.getElementById('analytics-section') as HTMLDetailsElement;
-  const analyticsLoading = document.getElementById('analytics-loading')!;
-  const analyticsError = document.getElementById('analytics-error')!;
-  const analyticsContent = document.getElementById('analytics-content')!;
-
-  if (analyticsSection) {
-    analyticsSection.addEventListener('toggle', async () => {
-      if (!analyticsSection.open) return;
-
-      // If already cached, don't re-fetch
-      if (analyticsCache) return;
-
-      analyticsLoading.classList.remove('hidden');
-      analyticsError.classList.add('hidden');
-      analyticsContent.classList.add('hidden');
-
-      try {
-        const [Chart, data] = await Promise.all([
-          loadChartJs(),
-          fetchAnalytics(),
-        ]);
-
-        analyticsLoading.classList.add('hidden');
-
-        if (!data || !Chart) {
-          analyticsError.classList.remove('hidden');
-          return;
-        }
-
-        analyticsCache = data;
-        renderAnalyticsCharts(data, Chart);
-      } catch (err) {
-        console.error('Analytics load error:', err);
-        analyticsLoading.classList.add('hidden');
-        analyticsError.classList.remove('hidden');
-      }
-    });
-  }
-
   // ─── Initial Load ────────────────────────────────────────────────
-  loadDashboard();
+  loadExpenses();
 
   // ─── Auto-refresh every 30 seconds ─────────────────────────────
   setInterval(() => {
-    loadDashboard();
+    loadExpenses();
   }, 30000);
 </script>
 </DashboardLayout>

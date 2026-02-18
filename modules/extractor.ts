@@ -25,6 +25,16 @@ export const ExtractorOutputSchema = z.object({
   subtotal: z.number(),
   tax: z.number().nullable(),
   total: z.number(),
+  vendor_email: z.string().nullable().optional(),
+  vendor_phone: z.string().nullable().optional(),
+  vendor_address_line1: z.string().nullable().optional(),
+  vendor_address_line2: z.string().nullable().optional(),
+  vendor_city: z.string().nullable().optional(),
+  vendor_state: z.string().nullable().optional(),
+  vendor_postal_code: z.string().nullable().optional(),
+  vendor_country: z.string().nullable().optional(),
+  vendor_website: z.string().nullable().optional(),
+  vendor_tax_id: z.string().nullable().optional(),
 });
 
 export type LineItem = z.infer<typeof LineItemSchema>;
@@ -53,7 +63,18 @@ Rules:
 - All monetary values must be numbers (not strings)
 - Currency must be a valid ISO 4217 code
 - Missing optional fields must be null, not omitted
-- If a date cannot be determined, make a reasonable inference from context`;
+- If a date cannot be determined, make a reasonable inference from context
+- vendor_email: string or null - vendor's email address if shown on invoice
+- vendor_phone: string or null - vendor's phone number if shown
+- vendor_address_line1: string or null - street address line 1
+- vendor_address_line2: string or null - suite, unit, building (null if not present)
+- vendor_city: string or null
+- vendor_state: string or null - state, province, or territory
+- vendor_postal_code: string or null
+- vendor_country: string or null - full country name or ISO code
+- vendor_website: string or null - vendor's website URL if shown
+- vendor_tax_id: string or null - ABN, EIN, VAT, GST number (include label prefix e.g. "ABN: 12 345 678 901")
+- Extract vendor contact details from the invoice header/footer. These are OPTIONAL — set to null if not visible.`;
 
 export async function extractInvoiceData(
   input: ExtractorInput

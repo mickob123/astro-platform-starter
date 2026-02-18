@@ -59,7 +59,7 @@ import '@fontsource/inter/800.css';
               />
             </div>
 
-            <div class="form-control w-full">
+            <div id="password-field" class="form-control w-full">
               <label class="label" for="password">
                 <span class="label-text font-medium">Password</span>
               </label>
@@ -72,6 +72,9 @@ import '@fontsource/inter/800.css';
                 placeholder="Enter your password"
                 class="input input-bordered w-full focus:input-primary"
               />
+              <label class="label">
+                <a id="forgot-link" href="#" class="label-text-alt link link-primary">Forgot password?</a>
+              </label>
             </div>
 
             <button
@@ -82,7 +85,23 @@ import '@fontsource/inter/800.css';
               <span id="btn-text">Sign In</span>
               <span id="btn-loading" class="loading loading-spinner loading-sm hidden"></span>
             </button>
+
+            <button
+              id="back-to-login"
+              type="button"
+              class="btn btn-ghost btn-sm w-full hidden"
+            >
+              Back to Sign In
+            </button>
           </form>
+
+          <!-- Success Alert (password reset) -->
+          <div id="success-alert" class="alert alert-success hidden">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span id="success-message">Check your email for a password reset link.</span>
+          </div>
 
           <!-- Error Alert -->
           <div id="error-alert" class="alert alert-error hidden">
@@ -121,21 +140,69 @@ import '@fontsource/inter/800.css';
       const btnLoading = document.getElementById('btn-loading') as HTMLSpanElement;
       const errorAlert = document.getElementById('error-alert') as HTMLDivElement;
       const errorMessage = document.getElementById('error-message') as HTMLSpanElement;
+      const successAlert = document.getElementById('success-alert') as HTMLDivElement;
+      const passwordField = document.getElementById('password-field') as HTMLDivElement;
+      const passwordInput = document.getElementById('password') as HTMLInputElement;
+      const forgotLink = document.getElementById('forgot-link') as HTMLAnchorElement;
+      const backToLogin = document.getElementById('back-to-login') as HTMLButtonElement;
+      const headerSubtext = document.querySelector('.card-body .text-center p') as HTMLParagraphElement;
+
+      let isResetMode = false;
 
       function setLoading(loading: boolean) {
         submitBtn.disabled = loading;
-        btnText.textContent = loading ? 'Signing in...' : 'Sign In';
+        const loadingLabel = isResetMode ? 'Sending...' : 'Signing in...';
+        const defaultLabel = isResetMode ? 'Send Reset Link' : 'Sign In';
+        btnText.textContent = loading ? loadingLabel : defaultLabel;
         btnLoading.classList.toggle('hidden', !loading);
       }
 
       function showError(message: string) {
         errorMessage.textContent = message;
         errorAlert.classList.remove('hidden');
+        successAlert.classList.add('hidden');
       }
 
       function hideError() {
         errorAlert.classList.add('hidden');
       }
+
+      function showSuccess(message: string) {
+        (document.getElementById('success-message') as HTMLSpanElement).textContent = message;
+        successAlert.classList.remove('hidden');
+        errorAlert.classList.add('hidden');
+      }
+
+      function enterResetMode() {
+        isResetMode = true;
+        passwordField.classList.add('hidden');
+        passwordInput.removeAttribute('required');
+        backToLogin.classList.remove('hidden');
+        btnText.textContent = 'Send Reset Link';
+        headerSubtext.textContent = 'Enter your email to receive a reset link';
+        hideError();
+        successAlert.classList.add('hidden');
+      }
+
+      function enterLoginMode() {
+        isResetMode = false;
+        passwordField.classList.remove('hidden');
+        passwordInput.setAttribute('required', '');
+        backToLogin.classList.add('hidden');
+        btnText.textContent = 'Sign In';
+        headerSubtext.textContent = 'Sign in to your account';
+        hideError();
+        successAlert.classList.add('hidden');
+      }
+
+      forgotLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        enterResetMode();
+      });
+
+      backToLogin.addEventListener('click', () => {
+        enterLoginMode();
+      });
 
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -144,6 +211,27 @@ import '@fontsource/inter/800.css';
 
         const formData = new FormData(form);
         const email = formData.get('email') as string;
+
+        if (isResetMode) {
+          if (!email) {
+            showError('Please enter your email address.');
+            setLoading(false);
+            return;
+          }
+
+          const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: `${window.location.origin}/settings`,
+          });
+
+          if (error) {
+            showError(error.message);
+          } else {
+            showSuccess('Check your email for a password reset link.');
+          }
+          setLoading(false);
+          return;
+        }
+
         const password = formData.get('password') as string;
 
         if (!email || !password) {

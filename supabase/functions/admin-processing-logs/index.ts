@@ -10,7 +10,7 @@
  */
 
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
-import { verifyJwt, requireAdmin, AuthError } from "../_shared/auth.ts";
+import { verifyJwt, requireRole, AuthError } from "../_shared/auth.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 Deno.serve(async (req: Request) => {
@@ -20,7 +20,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const { user } = await verifyJwt(req);
-    requireAdmin(user);
+    requireRole(user, ["admin", "viewer"]);
 
     if (req.method !== "GET") {
       return new Response(JSON.stringify({ error: "Method not allowed" }), {

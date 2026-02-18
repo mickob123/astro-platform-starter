@@ -10,7 +10,7 @@
  */
 
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
-import { verifyJwt, requireAdmin, AuthError } from "../_shared/auth.ts";
+import { verifyJwt, requireAdmin, requireRole, AuthError } from "../_shared/auth.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -22,7 +22,13 @@ Deno.serve(async (req: Request) => {
 
   try {
     const { user } = await verifyJwt(req);
-    requireAdmin(user);
+
+    // GET (view invoice) — admins and viewers; POST/PATCH/DELETE (actions) — admins only
+    if (req.method === "GET") {
+      requireRole(user, ["admin", "viewer"]);
+    } else {
+      requireAdmin(user);
+    }
 
     // Use service role for all DB operations (RLS only allows service_role)
     const supabase = createClient(

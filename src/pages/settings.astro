@@ -44,9 +44,9 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   <!-- Tabs -->
   <div class="tabs tabs-bordered mb-6">
     <a class="tab tab-active" id="tab-account">Account</a>
-    <a class="tab" id="tab-approvals">Approval Rules</a>
-    <a class="tab" id="tab-team">Team Members</a>
-    <a class="tab" id="tab-notifications">Notifications</a>
+    <a class="tab admin-only" id="tab-approvals">Approval Rules</a>
+    <a class="tab admin-only" id="tab-team">Team Members</a>
+    <a class="tab admin-only" id="tab-notifications">Notifications</a>
   </div>
 
   <!-- Account Tab Content -->
@@ -197,13 +197,83 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     <div id="rules-list" class="hidden space-y-3"></div>
   </div>
 
-  <!-- Team Members Tab Content (placeholder) -->
-  <div id="content-team" class="hidden">
-    <div class="text-center py-12 opacity-50">
-      <p class="text-lg font-semibold">Team Management</p>
-      <p class="text-sm mt-1">Invite team members and manage roles. Coming soon.</p>
+  <!-- Team Members Tab Content (admin-only) -->
+  <div id="content-team" class="hidden admin-only">
+    <!-- Invite Button -->
+    <div class="flex justify-end mb-4">
+      <button id="btn-invite-member" class="btn btn-primary btn-sm">+ Invite Team Member</button>
     </div>
+
+    <!-- Loading -->
+    <div id="team-loading" class="flex justify-center py-8">
+      <span class="loading loading-spinner loading-lg"></span>
+    </div>
+
+    <!-- Empty State -->
+    <div id="team-empty" class="hidden text-center py-12 opacity-50">
+      <p class="text-lg font-semibold">No team members yet</p>
+      <p class="text-sm mt-1">Invite team members to give them access to the platform.</p>
+    </div>
+
+    <!-- Members Table -->
+    <div id="team-table-container" class="hidden">
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr class="border-b border-base-200">
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Email</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Role</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden sm:table-cell">Joined</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden md:table-cell">Last Active</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="team-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Team feedback toast -->
+    <div id="team-feedback" class="hidden mt-4 text-sm"></div>
   </div>
+
+  <!-- Invite Member Modal -->
+  <dialog id="invite-modal" class="modal">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg">Invite Team Member</h3>
+      <div class="form-control mt-4">
+        <label class="label"><span class="label-text">Email Address</span></label>
+        <input id="invite-email" type="email" class="input input-bordered" placeholder="colleague@company.com" />
+      </div>
+      <div class="form-control mt-3">
+        <label class="label"><span class="label-text">Role</span></label>
+        <select id="invite-role" class="select select-bordered">
+          <option value="viewer">Viewer (read-only access)</option>
+          <option value="admin">Admin (full access)</option>
+        </select>
+      </div>
+      <p class="text-xs opacity-50 mt-3">An invitation email will be sent. The user must click the link to set their password and activate their account.</p>
+      <div id="invite-error" class="hidden mt-3 text-sm text-error"></div>
+      <div class="modal-action">
+        <button id="invite-cancel" class="btn btn-ghost">Cancel</button>
+        <button id="invite-send" class="btn btn-primary">Send Invite</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+
+  <!-- Remove Member Confirmation Modal -->
+  <dialog id="remove-member-modal" class="modal">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg">Remove Team Member</h3>
+      <p class="py-4">Are you sure you want to remove <strong id="remove-member-email"></strong> from your team? They will lose all access.</p>
+      <div class="modal-action">
+        <button id="remove-cancel" class="btn btn-ghost">Cancel</button>
+        <button id="remove-confirm" class="btn btn-error">Remove</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
 
   <!-- Notifications Tab Content -->
   <div id="content-notifications" class="hidden">
@@ -962,6 +1032,272 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     accountLoading.classList.add('hidden');
     accountContent.classList.remove('hidden');
   }
+
+  // ─── Team Members ─────────────────────────────────────────────
+  interface TeamMember {
+    id: string;
+    email: string;
+    role: string;
+    created_at: string;
+    last_sign_in_at: string | null;
+  }
+
+  let teamMembers: TeamMember[] = [];
+  let removingMemberId: string | null = null;
+  let teamLoaded = false;
+
+  const teamLoading = document.getElementById('team-loading')!;
+  const teamEmpty = document.getElementById('team-empty')!;
+  const teamTableContainer = document.getElementById('team-table-container')!;
+  const teamTableBody = document.getElementById('team-table-body')!;
+  const teamFeedback = document.getElementById('team-feedback')!;
+  const btnInviteMember = document.getElementById('btn-invite-member')!;
+  const inviteModal = document.getElementById('invite-modal') as HTMLDialogElement;
+  const inviteEmailInput = document.getElementById('invite-email') as HTMLInputElement;
+  const inviteRoleSelect = document.getElementById('invite-role') as HTMLSelectElement;
+  const inviteError = document.getElementById('invite-error')!;
+  const inviteCancelBtn = document.getElementById('invite-cancel')!;
+  const inviteSendBtn = document.getElementById('invite-send')!;
+  const removeMemberModal = document.getElementById('remove-member-modal') as HTMLDialogElement;
+  const removeMemberEmail = document.getElementById('remove-member-email')!;
+  const removeCancelBtn = document.getElementById('remove-cancel')!;
+  const removeConfirmBtn = document.getElementById('remove-confirm')!;
+
+  function showTeamFeedback(message: string, type: 'success' | 'error') {
+    teamFeedback.textContent = message;
+    teamFeedback.className = `mt-4 text-sm ${type === 'success' ? 'text-success' : 'text-error'}`;
+    teamFeedback.classList.remove('hidden');
+    setTimeout(() => teamFeedback.classList.add('hidden'), 4000);
+  }
+
+  async function fetchTeamMembers(): Promise<void> {
+    teamLoading.classList.remove('hidden');
+    teamEmpty.classList.add('hidden');
+    teamTableContainer.classList.add('hidden');
+
+    try {
+      const token = await getAuthToken();
+      if (!token) { window.location.href = '/login'; return; }
+
+      const res = await fetch(`${FUNCTIONS_URL}/admin-team`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        console.warn('Team endpoint returned', res.status);
+        teamMembers = [];
+      } else {
+        const data = await res.json();
+        teamMembers = data.members || [];
+      }
+    } catch (err) {
+      console.warn('Could not fetch team members:', err);
+      teamMembers = [];
+    }
+
+    renderTeamMembers();
+  }
+
+  function renderTeamMembers(): void {
+    teamLoading.classList.add('hidden');
+
+    if (teamMembers.length === 0) {
+      teamEmpty.classList.remove('hidden');
+      teamTableContainer.classList.add('hidden');
+      return;
+    }
+
+    teamEmpty.classList.add('hidden');
+    teamTableContainer.classList.remove('hidden');
+
+    // Get current user to prevent self-actions
+    const currentUserEmail = document.getElementById('account-email')?.textContent || '';
+
+    teamTableBody.innerHTML = teamMembers.map(member => {
+      const isSelf = member.email === currentUserEmail;
+      const joinedDate = member.created_at ? new Date(member.created_at).toLocaleDateString() : '--';
+      const lastActive = member.last_sign_in_at ? new Date(member.last_sign_in_at).toLocaleDateString() : 'Never';
+      const roleBadge = member.role === 'admin'
+        ? '<span class="badge badge-primary badge-sm">Admin</span>'
+        : '<span class="badge badge-ghost badge-sm">Viewer</span>';
+
+      const roleSelect = isSelf
+        ? roleBadge
+        : `<select class="select select-bordered select-xs" data-role-change="${member.id}" data-current-role="${member.role}">
+             <option value="admin" ${member.role === 'admin' ? 'selected' : ''}>Admin</option>
+             <option value="viewer" ${member.role === 'viewer' ? 'selected' : ''}>Viewer</option>
+           </select>`;
+
+      const removeBtn = isSelf
+        ? '<span class="text-xs opacity-40">You</span>'
+        : `<button class="btn btn-ghost btn-xs text-error" data-remove-member="${member.id}" data-remove-email="${escapeHtml(member.email)}" title="Remove">
+             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+             </svg>
+           </button>`;
+
+      return `
+        <tr class="border-b border-base-200/50">
+          <td class="font-medium">${escapeHtml(member.email)}</td>
+          <td>${roleSelect}</td>
+          <td class="hidden sm:table-cell text-sm">${joinedDate}</td>
+          <td class="hidden md:table-cell text-sm">${lastActive}</td>
+          <td>${removeBtn}</td>
+        </tr>
+      `;
+    }).join('');
+
+    // Bind role change dropdowns
+    teamTableBody.querySelectorAll<HTMLSelectElement>('[data-role-change]').forEach(select => {
+      select.addEventListener('change', async () => {
+        const memberId = select.dataset.roleChange!;
+        const newRole = select.value;
+        await changeRole(memberId, newRole);
+      });
+    });
+
+    // Bind remove buttons
+    teamTableBody.querySelectorAll<HTMLButtonElement>('[data-remove-member]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        removingMemberId = btn.dataset.removeMember!;
+        removeMemberEmail.textContent = btn.dataset.removeEmail || '';
+        removeMemberModal.showModal();
+      });
+    });
+  }
+
+  async function changeRole(userId: string, role: string): Promise<void> {
+    const token = await getAuthToken();
+    if (!token) { window.location.href = '/login'; return; }
+
+    try {
+      const res = await fetch(`${FUNCTIONS_URL}/admin-team`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ user_id: userId, role }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Failed' }));
+        throw new Error(err.error || `Request failed (${res.status})`);
+      }
+
+      // Update local state
+      const member = teamMembers.find(m => m.id === userId);
+      if (member) member.role = role;
+      showTeamFeedback('Role updated successfully.', 'success');
+    } catch (err: any) {
+      showTeamFeedback(err.message || 'Failed to change role', 'error');
+      renderTeamMembers(); // Revert UI
+    }
+  }
+
+  async function inviteMember(): Promise<void> {
+    const email = inviteEmailInput.value.trim();
+    const role = inviteRoleSelect.value;
+
+    if (!email) {
+      inviteEmailInput.classList.add('input-error');
+      return;
+    }
+    inviteEmailInput.classList.remove('input-error');
+    inviteError.classList.add('hidden');
+
+    const token = await getAuthToken();
+    if (!token) { window.location.href = '/login'; return; }
+
+    inviteSendBtn.classList.add('loading');
+
+    try {
+      const res = await fetch(`${FUNCTIONS_URL}/admin-team`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, role }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Failed to send invite' }));
+        throw new Error(err.error || `Request failed (${res.status})`);
+      }
+
+      inviteModal.close();
+      inviteEmailInput.value = '';
+      inviteRoleSelect.value = 'viewer';
+      showTeamFeedback(`Invitation sent to ${email}`, 'success');
+      await fetchTeamMembers();
+    } catch (err: any) {
+      inviteError.textContent = err.message;
+      inviteError.classList.remove('hidden');
+    } finally {
+      inviteSendBtn.classList.remove('loading');
+    }
+  }
+
+  async function removeMember(): Promise<void> {
+    if (!removingMemberId) return;
+
+    const token = await getAuthToken();
+    if (!token) { window.location.href = '/login'; return; }
+
+    removeConfirmBtn.classList.add('loading');
+
+    try {
+      const res = await fetch(`${FUNCTIONS_URL}/admin-team`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ user_id: removingMemberId }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Failed' }));
+        throw new Error(err.error || `Request failed (${res.status})`);
+      }
+
+      removeMemberModal.close();
+      removingMemberId = null;
+      showTeamFeedback('Team member removed.', 'success');
+      await fetchTeamMembers();
+    } catch (err: any) {
+      showTeamFeedback(err.message || 'Failed to remove member', 'error');
+    } finally {
+      removeConfirmBtn.classList.remove('loading');
+    }
+  }
+
+  // Team event listeners
+  btnInviteMember.addEventListener('click', () => {
+    inviteEmailInput.value = '';
+    inviteRoleSelect.value = 'viewer';
+    inviteError.classList.add('hidden');
+    inviteModal.showModal();
+  });
+  inviteCancelBtn.addEventListener('click', () => inviteModal.close());
+  inviteSendBtn.addEventListener('click', inviteMember);
+  removeCancelBtn.addEventListener('click', () => {
+    removingMemberId = null;
+    removeMemberModal.close();
+  });
+  removeConfirmBtn.addEventListener('click', removeMember);
+
+  // Lazy-load team members when tab is clicked
+  tabTeam.addEventListener('click', () => {
+    if (!teamLoaded) {
+      teamLoaded = true;
+      fetchTeamMembers();
+    }
+  });
 
   // ─── Initial Load ──────────────────────────────────────────────
   loadAccountInfo();

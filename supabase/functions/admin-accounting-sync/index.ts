@@ -146,12 +146,26 @@ async function qbFetch(
  * First searches by DisplayName; if not found, creates one.
  * Returns the QuickBooks Vendor ID as a string.
  */
+interface VendorContactData {
+  email?: string | null;
+  phone?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+  website?: string | null;
+  tax_id?: string | null;
+}
+
 async function resolveQBVendor(
   vendorName: string,
   vendorId: string,
   accessToken: string,
   companyId: string,
   supabase: SupabaseClient,
+  vendorContactData?: VendorContactData,
 ): Promise<string> {
   // Search for existing vendor by name (QB escapes single quotes with \')
   const safeName = vendorName.replace(/'/g, "\\'");
@@ -175,10 +189,39 @@ async function resolveQBVendor(
     return qbVendorId;
   }
 
-  // Vendor not found — create it
-  const createResult = await qbFetch("POST", "vendor", accessToken, companyId, {
-    DisplayName: vendorName,
-  });
+  // Vendor not found — create it with contact details
+  // deno-lint-ignore no-explicit-any
+  const vendorPayload: Record<string, any> = { DisplayName: vendorName };
+  if (vendorContactData) {
+    if (vendorContactData.email) {
+      vendorPayload.PrimaryEmailAddr = { Address: vendorContactData.email };
+    }
+    if (vendorContactData.phone) {
+      vendorPayload.PrimaryPhone = { FreeFormNumber: vendorContactData.phone };
+    }
+    if (vendorContactData.website) {
+      vendorPayload.WebAddr = { URI: vendorContactData.website };
+    }
+    if (vendorContactData.tax_id) {
+      // Strip label prefix for QB (e.g., "ABN: 12 345 678 901" -> "12345678901")
+      const cleanTaxId = vendorContactData.tax_id
+        .replace(/^(ABN|EIN|VAT|GST|TFN)[:\s]*/i, "")
+        .replace(/\s+/g, "");
+      vendorPayload.TaxIdentifier = cleanTaxId;
+    }
+    const hasAddress = vendorContactData.address_line1 || vendorContactData.city;
+    if (hasAddress) {
+      vendorPayload.BillAddr = {
+        ...(vendorContactData.address_line1 && { Line1: vendorContactData.address_line1 }),
+        ...(vendorContactData.address_line2 && { Line2: vendorContactData.address_line2 }),
+        ...(vendorContactData.city && { City: vendorContactData.city }),
+        ...(vendorContactData.state && { CountrySubDivisionCode: vendorContactData.state }),
+        ...(vendorContactData.postal_code && { PostalCode: vendorContactData.postal_code }),
+        ...(vendorContactData.country && { Country: vendorContactData.country }),
+      };
+    }
+  }
+  const createResult = await qbFetch("POST", "vendor", accessToken, companyId, vendorPayload);
 
   if (!createResult.ok) {
     const errDetail = createResult.data?.Fault?.Error?.[0]?.Detail
@@ -364,6 +407,111 @@ async function createQBBill(
   }
 
   return { billId: String(result.data.Bill.Id) };
+}
+
+/**
+ * Find or cache a payment account (Bank or Credit Card) in QuickBooks
+ * for recording Purchase transactions (expenses already paid).
+ */
+const _paymentAccountCache = new Map<string, string>();
+
+async function resolvePaymentAccount(
+  accessToken: string,
+  companyId: string,
+): Promise<string> {
+  if (_paymentAccountCache.has(companyId)) {
+    return _paymentAccountCache.get(companyId)!;
+  }
+
+  // Query for Bank accounts first, then Credit Card
+  for (const acctType of ["Bank", "Credit Card"]) {
+    const query = `SELECT Id, Name FROM Account WHERE AccountType = '${acctType}' MAXRESULTS 5`;
+    const result = await qbFetch("GET", `query?query=${encodeURIComponent(query)}`, accessToken, companyId);
+    if (result.ok && result.data?.QueryResponse?.Account?.length > 0) {
+      const acctId = String(result.data.QueryResponse.Account[0].Id);
+      console.log(`Payment account resolved: "${result.data.QueryResponse.Account[0].Name}" (${acctId}) type=${acctType}`);
+      _paymentAccountCache.set(companyId, acctId);
+      return acctId;
+    }
+  }
+
+  // Fallback
+  _paymentAccountCache.set(companyId, "1");
+  return "1";
+}
+
+/**
+ * Create a Purchase in QuickBooks from an expense.
+ * Purchases represent money already paid (receipts, credit card charges).
+ */
+async function createQBPurchase(
+  expense: any,
+  qbVendorId: string,
+  expenseAccountId: string,
+  paymentAccountId: string,
+  accessToken: string,
+  companyId: string,
+): Promise<{ purchaseId: string }> {
+  const descriptions = (expense.line_items || [])
+    .map((item: { description: string }) => item.description)
+    .filter(Boolean);
+  const lineDescription = descriptions.length > 0
+    ? descriptions.join("; ")
+    : expense.invoice_number || "Expense";
+
+  const lineItems = [
+    {
+      Id: "1",
+      DetailType: "AccountBasedExpenseLineDetail",
+      Amount: expense.total,
+      Description: lineDescription,
+      AccountBasedExpenseLineDetail: {
+        AccountRef: { value: expenseAccountId },
+        BillableStatus: "NotBillable",
+      },
+    },
+  ];
+
+  const purchasePayload: Record<string, unknown> = {
+    AccountRef: { value: paymentAccountId },
+    PaymentType: "CreditCard",
+    EntityRef: { value: qbVendorId, type: "Vendor" },
+    Line: lineItems,
+    TotalAmt: expense.total,
+    PrivateNote: `Auto-imported expense: ${expense.invoice_number || expense.id}`,
+  };
+
+  if (expense.invoice_number) purchasePayload.DocNumber = expense.invoice_number;
+  if (expense.invoice_date) purchasePayload.TxnDate = expense.invoice_date;
+
+  // Try with CurrencyRef for multi-currency companies
+  if (expense.currency) {
+    purchasePayload.CurrencyRef = { value: expense.currency };
+    purchasePayload.ExchangeRate = 1;
+  }
+
+  let result = await qbFetch("POST", "purchase", accessToken, companyId, purchasePayload);
+
+  // If multi-currency isn't enabled, retry without CurrencyRef
+  if (!result.ok && expense.currency) {
+    const errMsg = JSON.stringify(result.data?.Fault?.Error?.[0] || "");
+    if (errMsg.includes("Multi Currency") || errMsg.includes("MultiCurrency") || errMsg.includes("currency")) {
+      console.log("QB multi-currency not enabled, retrying purchase without CurrencyRef");
+      delete purchasePayload.CurrencyRef;
+      delete purchasePayload.ExchangeRate;
+      result = await qbFetch("POST", "purchase", accessToken, companyId, purchasePayload);
+    }
+  }
+
+  if (!result.ok) {
+    const errDetail = result.data?.Fault?.Error?.[0]?.Detail
+      || result.data?.Fault?.Error?.[0]?.Message
+      || JSON.stringify(result.data);
+    console.error("QB purchase creation failed:", errDetail);
+    throw new Error(`QuickBooks: ${errDetail}`);
+  }
+
+  return { purchaseId: String(result.data.Purchase.Id) };
 }
 
 // ─── Main handler ────────────────────────────────────────────────────
@@ -611,7 +759,7 @@ Deno.serve(async (req: Request) => {
       // Fetch the invoices to sync (admin can sync any invoice)
       const { data: invoices, error: fetchError } = await supabase
         .from("invoices")
-        .select("*, vendors(id, name, external_accounting_id)")
+        .select("*, vendors(id, name, external_accounting_id, email, phone, address_line1, address_line2, city, state, postal_code, country, website, tax_id)")
         .in("id", invoice_ids);
 
       if (fetchError) {
@@ -707,6 +855,18 @@ Deno.serve(async (req: Request) => {
               accessToken,
               activeConnection.company_id,
               supabase,
+              {
+                email: invoice.vendors?.email,
+                phone: invoice.vendors?.phone,
+                address_line1: invoice.vendors?.address_line1,
+                address_line2: invoice.vendors?.address_line2,
+                city: invoice.vendors?.city,
+                state: invoice.vendors?.state,
+                postal_code: invoice.vendors?.postal_code,
+                country: invoice.vendors?.country,
+                website: invoice.vendors?.website,
+                tax_id: invoice.vendors?.tax_id,
+              },
             );
             vendorCache.set(vendorDbId, qbVendorId);
           }
@@ -720,30 +880,30 @@ Deno.serve(async (req: Request) => {
             activeConnection.company_id,
           );
 
-          let billId: string;
+          let externalId: string;
+          const isExpense = invoice.document_type === "expense";
 
-          // If already synced, update the existing bill
+          // If already synced, update the existing record
           if (invoice.external_accounting_id) {
-            // Fetch existing bill to get SyncToken (required for QB updates)
+            const entityType = isExpense ? "purchase" : "bill";
+            const entityKey = isExpense ? "Purchase" : "Bill";
             const existing = await qbFetch(
               "GET",
-              `bill/${invoice.external_accounting_id}`,
+              `${entityType}/${invoice.external_accounting_id}`,
               accessToken,
               activeConnection.company_id,
             );
 
-            if (existing.ok && existing.data?.Bill) {
-              const updatedBill = { ...existing.data.Bill };
-              // Consolidate to a single line with the correct expense account
-              // This avoids QB showing "--Split--" in the Category column
+            if (existing.ok && existing.data?.[entityKey]) {
+              const updated = { ...existing.data[entityKey] };
               const descriptions = (invoice.line_items || [])
                 .map((li: any) => li.description)
                 .filter(Boolean);
               const lineDesc = descriptions.length > 0
                 ? descriptions.join("; ")
-                : invoice.invoice_number || "Invoice";
+                : invoice.invoice_number || (isExpense ? "Expense" : "Invoice");
 
-              updatedBill.Line = [
+              updated.Line = [
                 {
                   Id: "1",
                   DetailType: "AccountBasedExpenseLineDetail",
@@ -755,14 +915,14 @@ Deno.serve(async (req: Request) => {
                   },
                 },
               ];
-              updatedBill.TotalAmt = invoice.total;
+              updated.TotalAmt = invoice.total;
 
               const updateResult = await qbFetch(
                 "POST",
-                "bill",
+                entityType,
                 accessToken,
                 activeConnection.company_id,
-                updatedBill,
+                updated,
               );
               if (!updateResult.ok) {
                 const errDetail = updateResult.data?.Fault?.Error?.[0]?.Detail
@@ -770,12 +930,27 @@ Deno.serve(async (req: Request) => {
                   || "Unknown error";
                 throw new Error(`QuickBooks update: ${errDetail}`);
               }
-              billId = invoice.external_accounting_id;
+              externalId = invoice.external_accounting_id;
             } else {
-              throw new Error("Could not fetch existing bill from QuickBooks");
+              throw new Error(`Could not fetch existing ${entityType} from QuickBooks`);
             }
+          } else if (isExpense) {
+            // Create new Purchase in QuickBooks for expenses
+            const paymentAccountId = await resolvePaymentAccount(
+              accessToken,
+              activeConnection.company_id,
+            );
+            const result = await createQBPurchase(
+              invoice,
+              qbVendorId,
+              categoryAccountId,
+              paymentAccountId,
+              accessToken,
+              activeConnection.company_id,
+            );
+            externalId = result.purchaseId;
           } else {
-            // Create new Bill in QuickBooks
+            // Create new Bill in QuickBooks for invoices
             const result = await createQBBill(
               invoice,
               qbVendorId,
@@ -783,7 +958,7 @@ Deno.serve(async (req: Request) => {
               accessToken,
               activeConnection.company_id,
             );
-            billId = result.billId;
+            externalId = result.billId;
           }
 
           // Update sync_log to success
@@ -791,19 +966,19 @@ Deno.serve(async (req: Request) => {
             .from("sync_logs")
             .update({
               status: "success",
-              external_id: billId,
+              external_id: externalId,
               synced_at: new Date().toISOString(),
             })
             .eq("id", syncLog.id);
 
-          // Update invoice with QB bill ID
+          // Update invoice/expense with QB external ID
           await supabase
             .from("invoices")
             .update({
-              external_accounting_id: billId,
+              external_accounting_id: externalId,
               synced_at: new Date().toISOString(),
               sync_status: "synced",
-              accounting_id: billId,
+              accounting_id: externalId,
               accounting_sync_at: new Date().toISOString(),
               accounting_error: null,
               status: "synced",

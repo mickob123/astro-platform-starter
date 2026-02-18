@@ -33,6 +33,16 @@ vi.mock("openai", () => {
                     subtotal: 1000,
                     tax: 100,
                     total: 1100,
+                    vendor_email: null,
+                    vendor_phone: null,
+                    vendor_address_line1: null,
+                    vendor_address_line2: null,
+                    vendor_city: null,
+                    vendor_state: null,
+                    vendor_postal_code: null,
+                    vendor_country: null,
+                    vendor_website: null,
+                    vendor_tax_id: null,
                   }),
                 },
               },
@@ -110,6 +120,78 @@ describe("Invoice Extractor", () => {
         subtotal: 500,
         tax: null,
         total: 500,
+      };
+
+      const result = ExtractorOutputSchema.safeParse(output);
+      expect(result.success).toBe(true);
+    });
+
+    it("should accept vendor contact fields as null", () => {
+      const output = {
+        vendor_name: "Acme Corp",
+        invoice_number: "INV-001",
+        invoice_date: "2024-01-15",
+        due_date: null,
+        currency: "USD",
+        line_items: [{ description: "Service", quantity: 1, unit_price: 500, total: 500 }],
+        subtotal: 500,
+        tax: null,
+        total: 500,
+        vendor_email: null,
+        vendor_phone: null,
+        vendor_address_line1: null,
+        vendor_address_line2: null,
+        vendor_city: null,
+        vendor_state: null,
+        vendor_postal_code: null,
+        vendor_country: null,
+        vendor_website: null,
+        vendor_tax_id: null,
+      };
+
+      const result = ExtractorOutputSchema.safeParse(output);
+      expect(result.success).toBe(true);
+    });
+
+    it("should accept vendor contact fields with values", () => {
+      const output = {
+        vendor_name: "AusGrid Energy",
+        invoice_number: "INV-002",
+        invoice_date: "2024-03-01",
+        due_date: "2024-03-31",
+        currency: "AUD",
+        line_items: [{ description: "Electricity", quantity: null, unit_price: null, total: 250 }],
+        subtotal: 250,
+        tax: 25,
+        total: 275,
+        vendor_email: "billing@ausgrid.com.au",
+        vendor_phone: "13 13 46",
+        vendor_address_line1: "Level 22, 1 Market St",
+        vendor_address_line2: null,
+        vendor_city: "Sydney",
+        vendor_state: "NSW",
+        vendor_postal_code: "2000",
+        vendor_country: "Australia",
+        vendor_website: "https://www.ausgrid.com.au",
+        vendor_tax_id: "ABN: 67 095 226 465",
+      };
+
+      const result = ExtractorOutputSchema.safeParse(output);
+      expect(result.success).toBe(true);
+    });
+
+    it("should accept when vendor contact fields are omitted", () => {
+      const output = {
+        vendor_name: "Acme Corp",
+        invoice_number: "INV-001",
+        invoice_date: "2024-01-15",
+        due_date: null,
+        currency: "USD",
+        line_items: [{ description: "Service", quantity: 1, unit_price: 500, total: 500 }],
+        subtotal: 500,
+        tax: null,
+        total: 500,
+        // vendor contact fields intentionally omitted
       };
 
       const result = ExtractorOutputSchema.safeParse(output);

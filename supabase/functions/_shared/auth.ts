@@ -71,6 +71,17 @@ export function requireAdmin(user: JwtAuthResult["user"]): void {
 }
 
 /**
+ * Require the authenticated user to have one of the allowed roles.
+ * Use for endpoints that should be accessible to both admins and viewers.
+ */
+export function requireRole(user: JwtAuthResult["user"], allowedRoles: string[]): void {
+  const role = user.app_metadata?.role as string | undefined;
+  if (!role || !allowedRoles.includes(role)) {
+    throw new AuthError("Insufficient permissions", 403);
+  }
+}
+
+/**
  * Verify an API key from the x-api-key header.
  * Looks up the key in the api_keys table and returns the associated customer_id.
  * Uses the service role key so RLS is bypassed for the lookup itself.
