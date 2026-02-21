@@ -114,6 +114,7 @@ Deno.serve(async (req: Request) => {
         "subtotal",
         "tax",
         "total",
+        "document_type",
       ];
 
       const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -186,6 +187,14 @@ Deno.serve(async (req: Request) => {
               validationErrors.push(`${key} must be a finite number`);
             } else if (value < 0) {
               validationErrors.push(`${key} must not be negative`);
+            } else {
+              sanitized[key] = value;
+            }
+            break;
+
+          case "document_type":
+            if (typeof value !== "string" || !["invoice", "expense"].includes(value)) {
+              validationErrors.push('document_type must be "invoice" or "expense"');
             } else {
               sanitized[key] = value;
             }

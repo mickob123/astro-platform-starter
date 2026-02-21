@@ -65,6 +65,22 @@ Deno.serve(async (req: Request) => {
     const supabase = auth.supabase;
     const authenticatedCustomerId = auth.customer_id;
 
+    // --- Rate limiting: max 60 duplicate checks per customer per hour ---
+    const windowStart = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: recentCalls, error: rlError } = await supabase
+      .from("processing_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_id", authenticatedCustomerId)
+      .eq("step", "check_duplicate")
+      .gte("created_at", windowStart);
+
+    if (!rlError && recentCalls !== null && recentCalls >= 60) {
+      return new Response(
+        JSON.stringify({ error: "Rate limit exceeded", detail: "Maximum 60 duplicate checks per hour.", retry_after_seconds: 300 }),
+        { status: 429, headers: { ...headers, "Content-Type": "application/json", "Retry-After": "300" } },
+      );
+    }
+
     if (req.method !== "POST") {
       return new Response(JSON.stringify({ error: "Method not allowed" }), {
         status: 405,

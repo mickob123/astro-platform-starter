@@ -1,0 +1,174 @@
+---
+export const prerender = false;
+import AdminLayout from '../../layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="Create Organization">
+  <!-- Breadcrumb -->
+  <div class="text-sm breadcrumbs mb-4">
+    <ul>
+      <li><a href="/admin" class="no-underline opacity-60">Organizations</a></li>
+      <li>New Organization</li>
+    </ul>
+  </div>
+
+  <div class="max-w-lg mx-auto">
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body p-4 sm:p-6">
+        <h1 class="text-xl font-bold mb-4">Create New Organization</h1>
+
+        <form id="create-form" class="space-y-4">
+          <div class="form-control">
+            <label class="label"><span class="label-text font-medium">Organization Name *</span></label>
+            <input id="field-name" type="text" class="input input-bordered" placeholder="e.g. Acme Corp" required />
+          </div>
+
+          <div class="form-control">
+            <label class="label"><span class="label-text font-medium">Email *</span></label>
+            <input id="field-email" type="email" class="input input-bordered" placeholder="billing@acme.com" required />
+          </div>
+
+          <div class="form-control">
+            <label class="label"><span class="label-text font-medium">Accounting Platform</span></label>
+            <select id="field-platform" class="select select-bordered">
+              <option value="">None</option>
+              <option value="quickbooks">QuickBooks</option>
+              <option value="xero">Xero</option>
+              <option value="myob">MYOB</option>
+            </select>
+          </div>
+
+          <div class="form-control">
+            <label class="label"><span class="label-text font-medium">Slack Webhook URL</span></label>
+            <input id="field-slack" type="url" class="input input-bordered" placeholder="https://hooks.slack.com/services/..." />
+            <label class="label"><span class="label-text-alt opacity-50">Optional. For invoice processing notifications.</span></label>
+          </div>
+
+          <!-- Error -->
+          <div id="form-error" class="hidden alert alert-error text-sm">
+            <span id="form-error-message"></span>
+          </div>
+
+          <!-- Actions -->
+          <div class="flex gap-3 pt-2">
+            <button type="submit" id="submit-btn" class="btn btn-primary flex-1">Create Organization</button>
+            <a href="/admin" class="btn btn-ghost no-underline">Cancel</a>
+          </div>
+        </form>
+
+        <!-- Success Result -->
+        <div id="success-section" class="hidden">
+          <div class="alert alert-success mb-4">
+            <div>
+              <p class="font-semibold">Organization created successfully!</p>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div>
+              <p class="text-xs uppercase tracking-wide opacity-50 font-semibold">Organization</p>
+              <p id="result-name" class="font-medium mt-0.5"></p>
+            </div>
+            <div>
+              <p class="text-xs uppercase tracking-wide opacity-50 font-semibold">Email</p>
+              <p id="result-email" class="text-sm mt-0.5"></p>
+            </div>
+            <div class="bg-warning/10 border border-warning/30 rounded-lg p-4">
+              <p class="text-xs uppercase tracking-wide text-warning font-bold mb-2">API Key (save this now!)</p>
+              <code id="result-api-key" class="block text-sm break-all bg-base-200 p-3 rounded font-mono select-all"></code>
+              <p class="text-xs opacity-50 mt-2">This key cannot be retrieved later. Copy it now and store it securely.</p>
+              <button id="copy-key-btn" class="btn btn-sm btn-outline mt-2">Copy to Clipboard</button>
+            </div>
+          </div>
+
+          <div class="flex gap-3 mt-6">
+            <a id="view-org-btn" href="/admin" class="btn btn-primary flex-1 no-underline">View Organization</a>
+            <a href="/admin/create" class="btn btn-ghost no-underline">Create Another</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  import { getAccessToken, FUNCTIONS_URL } from '../../lib/supabase';
+
+  const form = document.getElementById('create-form') as HTMLFormElement;
+  const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
+  const formError = document.getElementById('form-error')!;
+  const formErrorMessage = document.getElementById('form-error-message')!;
+  const successSection = document.getElementById('success-section')!;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    formError.classList.add('hidden');
+
+    const name = (document.getElementById('field-name') as HTMLInputElement).value.trim();
+    const email = (document.getElementById('field-email') as HTMLInputElement).value.trim();
+    const accounting_platform = (document.getElementById('field-platform') as HTMLSelectElement).value || null;
+    const slack_webhook_url = (document.getElementById('field-slack') as HTMLInputElement).value.trim() || null;
+
+    if (!name || !email) {
+      formError.classList.remove('hidden');
+      formErrorMessage.textContent = 'Name and email are required.';
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="loading loading-spinner loading-sm"></span> Creating...';
+
+    try {
+      const token = await getAccessToken();
+      if (!token) { window.location.href = '/login'; return; }
+
+      const res = await fetch(`${FUNCTIONS_URL}/admin-create-customer`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, accounting_platform, slack_webhook_url }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(err.error || `Failed to create organization`);
+      }
+
+      const data = await res.json();
+
+      // Show success
+      form.classList.add('hidden');
+      successSection.classList.remove('hidden');
+
+      document.getElementById('result-name')!.textContent = data.customer.name;
+      document.getElementById('result-email')!.textContent = data.customer.email;
+      document.getElementById('result-api-key')!.textContent = data.api_key;
+      (document.getElementById('view-org-btn') as HTMLAnchorElement).href = `/admin/org/${data.customer.id}`;
+
+    } catch (err: any) {
+      formError.classList.remove('hidden');
+      formErrorMessage.textContent = err.message;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Create Organization';
+    }
+  });
+
+  // Copy button
+  document.getElementById('copy-key-btn')?.addEventListener('click', async () => {
+    const key = document.getElementById('result-api-key')!.textContent || '';
+    try {
+      await navigator.clipboard.writeText(key);
+      const btn = document.getElementById('copy-key-btn')!;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = 'Copy to Clipboard'; }, 2000);
+    } catch {
+      // Fallback
+      const textarea = document.createElement('textarea');
+      textarea.value = key;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
+  });
+</script>
+</AdminLayout>

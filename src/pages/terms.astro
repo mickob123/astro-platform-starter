@@ -1,23 +1,25 @@
 ---
 export const prerender = false;
 import '../styles/globals.css';
-import '@fontsource/inter/400.css';
-import '@fontsource/inter/800.css';
+import '../styles/docubot.css';
 ---
 
 <!doctype html>
-<html lang="en" data-theme="lofi">
+<html lang="en" data-theme="docubot">
   <head>
     <meta charset="UTF-8" />
-    <title>End-User License Agreement | Agentive Group</title>
+    <title>End-User License Agreement | DocuBot</title>
     <meta name="viewport" content="width=device-width" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   </head>
   <body class="min-h-screen bg-base-200">
     <div class="navbar bg-base-100 shadow-md px-4">
       <div class="flex-1">
-        <a href="/" class="text-lg sm:text-xl font-bold text-base-content no-underline">
-          Agentive Group
+        <a href="/" class="docubot-wordmark no-underline">
+          Docu<span class="bot">Bot</span>
         </a>
       </div>
       <div class="flex-none gap-2">

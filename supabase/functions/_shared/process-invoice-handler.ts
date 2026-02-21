@@ -12,7 +12,43 @@ import { getCorsHeaders, handleCors } from "./cors.ts";
 import { verifyApiKey, AuthError } from "./auth.ts";
 import { withRetry } from "./retry.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import OpenAI from "https://esm.sh/openai@4.52.0";
+// Direct Anthropic API calls — no SDK needed for Deno edge functions
+// deno-lint-ignore no-explicit-any
+async function callClaude(params: { system: string; messages: any[]; tools?: any[]; tool_choice?: any; max_tokens: number }): Promise<any> {
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
+
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: params.max_tokens,
+      system: params.system,
+      messages: params.messages,
+      ...(params.tools ? { tools: params.tools } : {}),
+      ...(params.tool_choice ? { tool_choice: params.tool_choice } : {}),
+    }),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`Anthropic API error ${resp.status}: ${errText.substring(0, 300)}`);
+  }
+
+  const data = await resp.json();
+  // Extract tool_use block if present
+  const toolBlock = data.content?.find((b: { type: string }) => b.type === "tool_use");
+  if (toolBlock) return toolBlock.input;
+  // Otherwise return text content
+  const textBlock = data.content?.find((b: { type: string }) => b.type === "text");
+  if (textBlock) return JSON.parse(textBlock.text);
+  throw new Error("No usable content in Anthropic response");
+}
 
 // ---------------------------------------------------------------------------
 // PDF helpers
@@ -520,6 +556,36 @@ export async function handleProcessInvoice(req: Request): Promise<Response> {
       );
     }
 
+    // --- Rate limiting: max 30 invocations per customer per hour ---
+    const RATE_LIMIT_MAX = 30;
+    const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+    const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString();
+
+    const { count: recentCount, error: rlError } = await supabase
+      .from("processing_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_id", customerId)
+      .eq("step", "classify")
+      .gte("created_at", windowStart);
+
+    if (!rlError && recentCount !== null && recentCount >= RATE_LIMIT_MAX) {
+      return new Response(
+        JSON.stringify({
+          error: "Rate limit exceeded",
+          detail: `Maximum ${RATE_LIMIT_MAX} invoices per hour. Try again later.`,
+          retry_after_seconds: 300,
+        }),
+        {
+          status: 429,
+          headers: {
+            ...headers,
+            "Content-Type": "application/json",
+            "Retry-After": "300",
+          },
+        },
+      );
+    }
+
     // --- Resolve attachment_base64: from storage path or direct ---
     let attachment_base64 = rawAttachmentBase64 || null;
 
@@ -527,40 +593,49 @@ export async function handleProcessInvoice(req: Request): Promise<Response> {
     if (pdf_storage_path && typeof pdf_storage_path === "string" && pdf_storage_path.length > 0) {
       console.log(`Downloading PDF from storage: ${pdf_storage_path} (skip_vision=${skip_vision})`);
       const MAX_PDF_BYTES = 10_000_000; // 10MB max PDF size
-      const DOWNLOAD_TIMEOUT_MS = 30_000; // 30s timeout for download
 
       try {
-        const adminSupabase = createClient(
-          Deno.env.get("SUPABASE_URL")!,
-          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-        );
-
-        // Download with timeout to prevent gateway 502
-        const downloadPromise = adminSupabase.storage
+        // Try Supabase client first, then direct fetch as fallback
+        let downloadOk = false;
+        const { data: downloadData, error: downloadError } = await supabase.storage
           .from("invoice-pdfs")
           .download(pdf_storage_path);
 
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("PDF download timed out")), DOWNLOAD_TIMEOUT_MS)
-        );
-
-        const { data: fileData, error: downloadError } = await Promise.race([
-          downloadPromise,
-          timeoutPromise,
-        ]) as Awaited<typeof downloadPromise>;
-
         if (downloadError) {
-          console.error(`Storage download failed: ${downloadError.message}`);
-        } else if (fileData) {
-          const arrayBuffer = await fileData.arrayBuffer();
+          console.error(`Storage client download failed: ${downloadError.message}`);
+          // Fallback: direct fetch
+          const storageUrl = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/invoice-pdfs/${pdf_storage_path}`;
+          const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+          console.log(`Trying direct fetch fallback: ${storageUrl}`);
+          const directRes = await fetch(storageUrl, {
+            headers: { "Authorization": `Bearer ${serviceKey}` },
+            signal: AbortSignal.timeout(30_000),
+          });
+          console.log(`Direct fetch status: ${directRes.status}`);
+          if (directRes.ok) {
+            const buf = await directRes.arrayBuffer();
+            const bytes = new Uint8Array(buf);
+            if (bytes.length <= MAX_PDF_BYTES) {
+              attachment_base64 = uint8ArrayToBase64(bytes);
+              downloadOk = true;
+              console.log(`PDF via direct fetch: ${bytes.length} bytes`);
+            }
+          }
+        } else if (downloadData) {
+          const arrayBuffer = await downloadData.arrayBuffer();
           const bytes = new Uint8Array(arrayBuffer);
 
           if (bytes.length > MAX_PDF_BYTES) {
             console.warn(`PDF too large (${bytes.length} bytes > ${MAX_PDF_BYTES}), skipping`);
           } else {
             attachment_base64 = uint8ArrayToBase64(bytes);
+            downloadOk = true;
             console.log(`PDF downloaded from storage: ${bytes.length} bytes -> ${attachment_base64.length} chars base64`);
           }
+        }
+
+        if (!downloadOk) {
+          console.error(`All PDF download methods failed for: ${pdf_storage_path}`);
         }
       } catch (storageErr) {
         const errMsg = storageErr instanceof Error ? storageErr.message : String(storageErr);
@@ -568,9 +643,9 @@ export async function handleProcessInvoice(req: Request): Promise<Response> {
       }
     }
 
-    if (!email_subject || !email_body) {
+    if (!email_subject || (!email_body && !pdf_storage_path)) {
       return new Response(
-        JSON.stringify({ error: "email_subject and email_body are required" }),
+        JSON.stringify({ error: "email_subject and either email_body or pdf_storage_path are required" }),
         { status: 400, headers: { ...headers, "Content-Type": "application/json" } },
       );
     }
@@ -593,16 +668,18 @@ export async function handleProcessInvoice(req: Request): Promise<Response> {
       : null;
 
     if (hasPdfForVision) {
-      console.log(`PDF available for GPT-4o vision: ${attachment_base64!.length} chars base64`);
+      console.log(`PDF available for Claude vision: ${attachment_base64!.length} chars base64`);
       if (attachment_base64!.length > MAX_BASE64_FOR_VISION) {
         console.log(`Truncated to ${MAX_BASE64_FOR_VISION} chars for vision API`);
       }
     }
 
-    // Extract text from PDF when available (regardless of skip_vision)
-    if (!resolvedAttachmentText && attachment_base64) {
+    // Extract text from PDF only when we DON'T have vision (text-only fallback).
+    // When Claude vision is available, it reads the PDF directly — no need for
+    // custom text extraction which can crash on larger/complex PDFs.
+    if (!resolvedAttachmentText && attachment_base64 && !hasPdfForVision) {
       try {
-        console.log(`Extracting PDF text (skip_vision=${skip_vision})...`);
+        console.log(`Extracting PDF text (no vision fallback)...`);
         const extracted = await pdfBase64ToText(attachment_base64);
         if (extracted && extracted.length > 20) {
           resolvedAttachmentText = extracted;
@@ -648,7 +725,7 @@ export async function handleProcessInvoice(req: Request): Promise<Response> {
     logId = logData.id;
 
     // --- Step 1: Classify ---
-    const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
+    // Claude API calls use the callClaude() helper defined at the top of this file
 
     const hasPdfAttachment = !!(pdf_storage_path || rawAttachmentBase64 || body.pdf_filename);
     const classifyTextContent = `Email Subject: ${email_subject}\n\nEmail Body:\n${email_body}\n\n${
@@ -659,40 +736,40 @@ export async function handleProcessInvoice(req: Request): Promise<Response> {
           : "No attachment text available."
     }`;
 
+    // Classify step: always text-only (email subject/body is enough to classify).
+    // Sending the PDF here doubles processing time with no accuracy gain.
     // deno-lint-ignore no-explicit-any
-    let classifyUserMessage: any;
-    if (pdfBase64ForVision) {
-      console.log("Classify step: using GPT-4o with PDF file attachment");
-      classifyUserMessage = {
-        role: "user",
-        content: [
-          { type: "text", text: `${classifyTextContent}\n\nThe attached PDF is the actual invoice document. Use it as primary source.` },
-          {
-            type: "file",
-            file: {
-              filename: "invoice.pdf",
-              file_data: `data:application/pdf;base64,${pdfBase64ForVision}`,
-            },
-          },
-        ],
-      };
+    const classifyContent: any[] = [];
+    if (hasPdfAttachment) {
+      classifyContent.push({ type: "text", text: `${classifyTextContent}\n\nNote: A PDF attachment is present and will be used for data extraction in the next step.` });
     } else {
-      classifyUserMessage = { role: "user", content: classifyTextContent };
+      classifyContent.push({ type: "text", text: classifyTextContent });
     }
 
+    const classifyTool = {
+      name: "classify_document",
+      description: "Classify a financial document based on its content",
+      input_schema: {
+        type: "object" as const,
+        properties: {
+          is_invoice: { type: "boolean", description: "True if this is an invoice or expense (any financial document worth processing)" },
+          document_type: { type: "string", enum: ["invoice", "expense", "other"], description: "The type of financial document" },
+          vendor_name: { type: ["string", "null"], description: "The vendor/company name if identifiable" },
+          confidence: { type: "number", description: "Confidence in classification, 0 to 1" },
+          signals: { type: "array", items: { type: "string" }, description: "Detected classification indicators" },
+        },
+        required: ["is_invoice", "document_type", "confidence", "signals"],
+      },
+    };
+
     const classification = await withRetry(async () => {
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          { role: "system", content: CLASSIFY_PROMPT },
-          classifyUserMessage,
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0,
+      return await callClaude({
+        system: CLASSIFY_PROMPT,
+        max_tokens: 1024,
+        tools: [classifyTool],
+        tool_choice: { type: "tool", name: "classify_document" },
+        messages: [{ role: "user", content: classifyContent }],
       });
-      const content = response.choices[0]?.message?.content;
-      if (!content) throw new Error("No response from OpenAI (classify)");
-      return JSON.parse(content);
     });
 
     await supabase
@@ -718,6 +795,18 @@ export async function handleProcessInvoice(req: Request): Promise<Response> {
         })
         .eq("id", logId);
 
+      // Mark dedup as processed (skipped is still a successful outcome — don't retry)
+      const gmailMsgIdSkip = metadata?.gmail_message_id;
+      if (gmailMsgIdSkip && customerId) {
+        try {
+          await supabase
+            .from("email_dedup")
+            .update({ status: "processed", last_error: null })
+            .eq("gmail_message_id", gmailMsgIdSkip)
+            .eq("customer_id", customerId);
+        } catch { /* non-fatal */ }
+      }
+
       return new Response(
         JSON.stringify({
           status: "skipped",
@@ -736,52 +825,80 @@ export async function handleProcessInvoice(req: Request): Promise<Response> {
       .eq("id", logId);
 
     const documentText = resolvedAttachmentText || email_body;
-    const extractionTextContent = [
-      `Email Subject: ${email_subject}`,
-      `\nDocument Content:\n${documentText}`,
-    ].join("\n");
 
+    // Build content blocks for Claude extraction (text + optional PDF)
     // deno-lint-ignore no-explicit-any
-    let extractUserMessage: any;
+    const extractContent: any[] = [];
     if (pdfBase64ForVision) {
-      console.log("Extract step: using GPT-4o with PDF file attachment (primary)");
-      extractUserMessage = {
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text: `Email Subject: ${email_subject}\n\nExtract invoice data from the attached PDF document. The PDF is the actual invoice — read all values directly from it.\n\n${
-              resolvedAttachmentText
-                ? `Supplementary text (for reference only, prefer the PDF):\n${resolvedAttachmentText}`
-                : "No supplementary text available."
-            }`,
-          },
-          {
-            type: "file",
-            file: {
-              filename: "invoice.pdf",
-              file_data: `data:application/pdf;base64,${pdfBase64ForVision}`,
-            },
-          },
-        ],
-      };
+      console.log("Extract step: using Claude Sonnet 4.6 with PDF document (primary)");
+      extractContent.push({
+        type: "document",
+        source: { type: "base64", media_type: "application/pdf", data: pdfBase64ForVision },
+      });
+      extractContent.push({
+        type: "text",
+        text: `Email Subject: ${email_subject}\n\nExtract invoice data from the attached PDF document. The PDF is the actual invoice — read all values directly from it.\n\n${
+          resolvedAttachmentText
+            ? `Supplementary text (for reference only, prefer the PDF):\n${resolvedAttachmentText}`
+            : "No supplementary text available."
+        }`,
+      });
     } else {
-      extractUserMessage = { role: "user", content: extractionTextContent };
+      extractContent.push({
+        type: "text",
+        text: `Email Subject: ${email_subject}\n\nDocument Content:\n${documentText}`,
+      });
     }
 
+    const lineItemSchema = {
+      type: "object" as const,
+      properties: {
+        description: { type: "string" },
+        quantity: { type: "number" },
+        unit_price: { type: "number" },
+        total: { type: "number" },
+      },
+      required: ["description", "quantity", "unit_price", "total"],
+    };
+
+    const extractTool = {
+      name: "extract_invoice_data",
+      description: "Extract structured invoice/expense data from a financial document",
+      input_schema: {
+        type: "object" as const,
+        properties: {
+          vendor_name: { type: "string", description: "Vendor/company name" },
+          invoice_number: { type: "string", description: "Invoice or receipt number" },
+          invoice_date: { type: "string", description: "Invoice/transaction date in YYYY-MM-DD format" },
+          due_date: { type: ["string", "null"], description: "Payment due date in YYYY-MM-DD format, null for receipts" },
+          currency: { type: "string", description: "ISO 4217 currency code (e.g. AUD, USD)" },
+          line_items: { type: "array", items: lineItemSchema, description: "Individual line items on the invoice" },
+          subtotal: { type: "number", description: "Sum of line item totals BEFORE tax" },
+          tax: { type: ["number", "null"], description: "GST/VAT amount, 0 if no tax" },
+          total: { type: "number", description: "Final amount = subtotal + tax" },
+          vendor_email: { type: ["string", "null"], description: "Vendor email address if shown" },
+          vendor_phone: { type: ["string", "null"], description: "Vendor phone number if shown" },
+          vendor_address_line1: { type: ["string", "null"], description: "Street address line 1" },
+          vendor_address_line2: { type: ["string", "null"], description: "Suite/unit/building, null if not present" },
+          vendor_city: { type: ["string", "null"] },
+          vendor_state: { type: ["string", "null"], description: "State, province, or territory" },
+          vendor_postal_code: { type: ["string", "null"] },
+          vendor_country: { type: ["string", "null"], description: "Full country name or ISO code" },
+          vendor_website: { type: ["string", "null"], description: "Vendor website URL if shown" },
+          vendor_tax_id: { type: ["string", "null"], description: "ABN, EIN, VAT, GST number with label prefix" },
+        },
+        required: ["vendor_name", "invoice_number", "invoice_date", "currency", "line_items", "subtotal", "tax", "total"],
+      },
+    };
+
     const extraction = await withRetry(async () => {
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          { role: "system", content: EXTRACT_PROMPT },
-          extractUserMessage,
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0,
+      return await callClaude({
+        system: EXTRACT_PROMPT,
+        max_tokens: 4096,
+        tools: [extractTool],
+        tool_choice: { type: "tool", name: "extract_invoice_data" },
+        messages: [{ role: "user", content: extractContent }],
       });
-      const content = response.choices[0]?.message?.content;
-      if (!content) throw new Error("No response from OpenAI (extract)");
-      return JSON.parse(content);
     });
 
     await supabase
@@ -800,20 +917,53 @@ export async function handleProcessInvoice(req: Request): Promise<Response> {
       `\nORIGINAL DOCUMENT TEXT:\n${documentText}`,
     ].join("\n");
 
+    const verifyTool = {
+      name: "verify_extraction",
+      description: "Verify and optionally correct extracted invoice data against the original document",
+      input_schema: {
+        type: "object" as const,
+        properties: {
+          status: { type: "string", enum: ["VERIFIED", "CORRECTED"], description: "VERIFIED if no corrections needed, CORRECTED if changes were made" },
+          corrections: { type: "array", items: { type: "string" }, description: "List of corrections made (empty if VERIFIED)" },
+          data: {
+            type: "object",
+            description: "The complete invoice data object — corrected if needed, unchanged if verified",
+            properties: {
+              vendor_name: { type: "string" },
+              invoice_number: { type: "string" },
+              invoice_date: { type: "string" },
+              due_date: { type: ["string", "null"] },
+              currency: { type: "string" },
+              line_items: { type: "array", items: { type: "object", properties: { description: { type: "string" }, quantity: { type: "number" }, unit_price: { type: "number" }, total: { type: "number" } } } },
+              subtotal: { type: "number" },
+              tax: { type: ["number", "null"] },
+              total: { type: "number" },
+              vendor_email: { type: ["string", "null"] },
+              vendor_phone: { type: ["string", "null"] },
+              vendor_address_line1: { type: ["string", "null"] },
+              vendor_address_line2: { type: ["string", "null"] },
+              vendor_city: { type: ["string", "null"] },
+              vendor_state: { type: ["string", "null"] },
+              vendor_postal_code: { type: ["string", "null"] },
+              vendor_country: { type: ["string", "null"] },
+              vendor_website: { type: ["string", "null"] },
+              vendor_tax_id: { type: ["string", "null"] },
+            },
+            required: ["vendor_name", "invoice_number", "invoice_date", "currency", "line_items", "subtotal", "tax", "total"],
+          },
+        },
+        required: ["status", "corrections", "data"],
+      },
+    };
+
     const verification = await withRetry(async () => {
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          { role: "system", content: VERIFY_PROMPT },
-          { role: "user", content: verifyInput },
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0,
-        max_tokens: 4000,
+      return await callClaude({
+        system: VERIFY_PROMPT,
+        max_tokens: 4096,
+        tools: [verifyTool],
+        tool_choice: { type: "tool", name: "verify_extraction" },
+        messages: [{ role: "user", content: verifyInput }],
       });
-      const content = response.choices[0]?.message?.content;
-      if (!content) throw new Error("No response from OpenAI (verify)");
-      return JSON.parse(content);
     });
 
     // Apply corrections if any
@@ -855,6 +1005,18 @@ export async function handleProcessInvoice(req: Request): Promise<Response> {
           duration_ms: Date.now() - startTime,
         })
         .eq("id", logId);
+
+      // Mark dedup as processed (duplicate is still a successful outcome)
+      const gmailMsgIdDup = metadata?.gmail_message_id;
+      if (gmailMsgIdDup && customerId) {
+        try {
+          await supabase
+            .from("email_dedup")
+            .update({ status: "processed", last_error: null })
+            .eq("gmail_message_id", gmailMsgIdDup)
+            .eq("customer_id", customerId);
+        } catch { /* non-fatal */ }
+      }
 
       return new Response(
         JSON.stringify({
@@ -960,9 +1122,9 @@ export async function handleProcessInvoice(req: Request): Promise<Response> {
         customer_id: customerId,
         vendor_id: vendorId,
         document_type: documentType,
-        invoice_number: verifiedExtraction.invoice_number,
-        invoice_date: verifiedExtraction.invoice_date,
-        due_date: verifiedExtraction.due_date,
+        invoice_number: verifiedExtraction.invoice_number || null,
+        invoice_date: verifiedExtraction.invoice_date || null,
+        due_date: verifiedExtraction.due_date || null,
         currency: verifiedExtraction.currency,
         subtotal: verifiedExtraction.subtotal,
         tax: verifiedExtraction.tax,
@@ -1102,6 +1264,27 @@ export async function handleProcessInvoice(req: Request): Promise<Response> {
       })
       .eq("id", logId);
 
+    // --- Update email_dedup: mark as processed ---
+    const gmailMsgId = metadata?.gmail_message_id;
+    if (gmailMsgId && customerId) {
+      try {
+        await supabase
+          .from("email_dedup")
+          .update({
+            status: "processed",
+            invoice_id: invoiceData.id,
+            last_error: null,
+          })
+          .eq("gmail_message_id", gmailMsgId)
+          .eq("customer_id", customerId);
+
+        await supabase
+          .from("customers")
+          .update({ last_successful_process: new Date().toISOString() })
+          .eq("id", customerId);
+      } catch { /* non-fatal */ }
+    }
+
     return new Response(
       JSON.stringify({
         status: "completed",
@@ -1128,6 +1311,32 @@ export async function handleProcessInvoice(req: Request): Promise<Response> {
       } catch {
         console.error("Failed to update processing log with error");
       }
+    }
+
+    // --- Update email_dedup: mark as failed, promote to dead_letter if max attempts ---
+    const gmailMsgId = metadata?.gmail_message_id;
+    if (supabase && gmailMsgId && customerId) {
+      try {
+        const { data: dedupEntry } = await supabase
+          .from("email_dedup")
+          .select("id, attempt_count, max_attempts")
+          .eq("gmail_message_id", gmailMsgId)
+          .eq("customer_id", customerId)
+          .maybeSingle();
+
+        if (dedupEntry) {
+          const newStatus = dedupEntry.attempt_count >= dedupEntry.max_attempts
+            ? "dead_letter"
+            : "failed";
+          await supabase
+            .from("email_dedup")
+            .update({
+              status: newStatus,
+              last_error: error instanceof Error ? error.message : String(error),
+            })
+            .eq("id", dedupEntry.id);
+        }
+      } catch { /* non-fatal */ }
     }
 
     if (error instanceof AuthError) {

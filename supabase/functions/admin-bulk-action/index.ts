@@ -4,7 +4,7 @@
  * Auth: Supabase JWT + admin role check.
  * Deploy WITHOUT --no-verify-jwt.
  *
- * POST { action: "approve" | "reject" | "delete" | "export_csv", invoice_ids: string[] }
+ * POST { action: "approve" | "reject" | "delete" | "reclassify" | "export_csv", invoice_ids: string[] }
  *
  * Returns:
  *   - approve/reject/delete: { success: true, processed: number, errors: [...] }
@@ -17,7 +17,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const VALID_ACTIONS = ["approve", "reject", "delete", "export_csv"] as const;
+const VALID_ACTIONS = ["approve", "reject", "delete", "reclassify", "export_csv"] as const;
 type BulkAction = (typeof VALID_ACTIONS)[number];
 
 const MAX_BATCH_SIZE = 100;
@@ -117,6 +117,70 @@ Deno.serve(async (req: Request) => {
           "Content-Disposition": `attachment; filename="invoices_export_${Date.now()}.csv"`,
         },
       });
+    }
+
+    // ----------------------------------------------------------------
+    // reclassify — flip document_type between invoice ↔ expense
+    // ----------------------------------------------------------------
+    if (action === "reclassify") {
+      const processed: string[] = [];
+      const errors: Array<{ invoice_id: string; error: string }> = [];
+
+      for (const invoiceId of invoice_ids) {
+        try {
+          const { data: existing, error: existingError } = await supabase
+            .from("invoices")
+            .select("id, customer_id, document_type")
+            .eq("id", invoiceId)
+            .single();
+
+          if (existingError || !existing) {
+            errors.push({ invoice_id: invoiceId, error: "Invoice not found" });
+            continue;
+          }
+
+          const newType = existing.document_type === "expense" ? "invoice" : "expense";
+
+          const { error: updateError } = await supabase
+            .from("invoices")
+            .update({
+              document_type: newType,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", invoiceId);
+
+          if (updateError) {
+            errors.push({ invoice_id: invoiceId, error: updateError.message });
+            continue;
+          }
+
+          await supabase.from("processing_logs").insert({
+            customer_id: existing.customer_id,
+            invoice_id: invoiceId,
+            step: "admin_bulk_reclassify",
+            status: "success",
+            input: {
+              action: "reclassify",
+              previous_type: existing.document_type,
+              new_type: newType,
+              admin_user_id: user.id,
+              admin_email: user.email,
+            },
+          });
+
+          processed.push(invoiceId);
+        } catch (err) {
+          errors.push({
+            invoice_id: invoiceId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, action, processed: processed.length, errors }),
+        { status: 200, headers: { ...headers, "Content-Type": "application/json" } },
+      );
     }
 
     // ----------------------------------------------------------------

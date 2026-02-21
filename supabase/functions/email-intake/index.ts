@@ -367,6 +367,35 @@ Deno.serve(async (req: Request) => {
 
     const customerId = intakeAddr.customer_id;
 
+    // --- Rate limiting: max 30 intake emails per customer per hour ---
+    const RATE_LIMIT_MAX = 30;
+    const windowStart = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+    const { count: recentIntakes, error: rlError } = await supabase
+      .from("processing_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_id", customerId)
+      .eq("step", "email_intake")
+      .gte("created_at", windowStart);
+
+    if (!rlError && recentIntakes !== null && recentIntakes >= RATE_LIMIT_MAX) {
+      return new Response(
+        JSON.stringify({
+          error: "Rate limit exceeded",
+          detail: `Maximum ${RATE_LIMIT_MAX} forwarded emails per hour.`,
+          retry_after_seconds: 300,
+        }),
+        {
+          status: 429,
+          headers: {
+            ...headers,
+            "Content-Type": "application/json",
+            "Retry-After": "300",
+          },
+        },
+      );
+    }
+
     // --- Verify the customer has an active API key (confirms valid customer) ---
     const { data: apiKeyCheck, error: apiKeyCheckError } = await supabase
       .from("api_keys")

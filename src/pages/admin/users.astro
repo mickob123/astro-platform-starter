@@ -1,0 +1,110 @@
+---
+export const prerender = false;
+import AdminLayout from '../../layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="All Users">
+  <h1 class="text-xl font-bold mb-4">All Users</h1>
+
+  <!-- Users Table -->
+  <div class="card bg-base-100 shadow-sm">
+    <div class="card-body p-0">
+      <!-- Loading -->
+      <div id="table-loading" class="flex flex-col items-center justify-center py-16">
+        <span class="loading loading-spinner loading-lg text-primary"></span>
+        <p class="mt-3 text-sm opacity-60">Loading users...</p>
+      </div>
+
+      <!-- Error -->
+      <div id="table-error" class="hidden flex-col items-center justify-center py-16 px-4 text-center">
+        <p class="font-semibold text-error">Failed to load users</p>
+        <p id="error-message" class="text-sm opacity-60 mt-1"></p>
+        <button id="retry-btn" class="btn btn-sm btn-primary mt-4 no-underline">Retry</button>
+      </div>
+
+      <!-- Empty -->
+      <div id="table-empty" class="hidden flex-col items-center justify-center py-16 text-center">
+        <p class="font-semibold">No users found</p>
+      </div>
+
+      <!-- Table -->
+      <div id="table-container" class="hidden overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr class="border-b border-base-200">
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Email</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Role</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Organization</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden sm:table-cell">Last Sign In</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden md:table-cell">Created</th>
+            </tr>
+          </thead>
+          <tbody id="users-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="user-count" class="text-sm opacity-50 mt-3 text-center"></div>
+</AdminLayout>
+
+<script>
+  import { getAccessToken, FUNCTIONS_URL } from '../../lib/supabase';
+
+  const API_BASE = `${FUNCTIONS_URL}/admin-platform`;
+
+  const dateFmt = new Intl.DateTimeFormat('en-AU', { month: 'short', day: 'numeric', year: 'numeric' });
+  const dateTimeFmt = new Intl.DateTimeFormat('en-AU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  function escapeHtml(str: string): string {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  async function load() {
+    const token = await getAccessToken();
+    if (!token) { window.location.href = '/login'; return; }
+
+    try {
+      const res = await fetch(`${API_BASE}?view=users`, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+      const data = await res.json();
+
+      document.getElementById('table-loading')!.classList.add('hidden');
+      document.getElementById('table-loading')!.style.display = 'none';
+
+      const users = data.users || [];
+      if (users.length === 0) {
+        document.getElementById('table-empty')!.classList.remove('hidden');
+        document.getElementById('table-empty')!.style.display = 'flex';
+        return;
+      }
+
+      document.getElementById('table-container')!.classList.remove('hidden');
+      document.getElementById('users-body')!.innerHTML = users.map((u: any) => `
+        <tr class="border-b border-base-200/50 hover:bg-base-200/50 ${u.customer_id ? 'cursor-pointer' : ''}" ${u.customer_id ? `onclick="window.location.href='/admin/org/${u.customer_id}'"` : ''}>
+          <td class="text-sm font-medium">${escapeHtml(u.email || '--')}</td>
+          <td><span class="badge badge-sm ${u.role === 'admin' ? 'badge-primary' : 'badge-ghost'}">${u.role}</span></td>
+          <td class="text-sm">${u.customer_id ? `<a href="/admin/org/${u.customer_id}" class="link link-hover no-underline">${escapeHtml(u.customer_name)}</a>` : '<span class="opacity-40">Unassigned</span>'}</td>
+          <td class="hidden sm:table-cell text-sm opacity-70">${u.last_sign_in_at ? dateTimeFmt.format(new Date(u.last_sign_in_at)) : 'Never'}</td>
+          <td class="hidden md:table-cell text-sm opacity-70">${u.created_at ? dateFmt.format(new Date(u.created_at)) : '--'}</td>
+        </tr>
+      `).join('');
+
+      document.getElementById('user-count')!.textContent = `${users.length} user${users.length !== 1 ? 's' : ''} total`;
+    } catch (err: any) {
+      document.getElementById('table-loading')!.classList.add('hidden');
+      document.getElementById('table-loading')!.style.display = 'none';
+      document.getElementById('table-error')!.classList.remove('hidden');
+      document.getElementById('table-error')!.style.display = 'flex';
+      document.getElementById('error-message')!.textContent = err.message;
+    }
+  }
+
+  document.getElementById('retry-btn')?.addEventListener('click', load);
+  load();
+</script>
+</AdminLayout>

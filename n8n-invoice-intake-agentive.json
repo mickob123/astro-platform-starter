@@ -1,36 +1,40 @@
 {
-  "name": "Invoice Intake - Agentive",
+  "name": "Invoice Email Poller (Scalable)",
   "nodes": [
     {
-      "id": "gmail-trigger-1",
-      "name": "Gmail Trigger",
-      "type": "n8n-nodes-base.gmailTrigger",
-      "typeVersion": 1.3,
-      "position": [260, 300],
+      "id": "schedule-trigger",
+      "name": "Every 2 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        260,
+        300
+      ],
       "parameters": {
-        "authentication": "oAuth2",
-        "event": "messageReceived",
-        "simple": false,
-        "filters": {
-          "readStatus": "unread"
-        },
-        "options": {
-          "downloadAttachments": true,
-          "dataPropertyAttachmentsPrefixName": "attachment_"
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 2
+            }
+          ]
         }
       }
     },
     {
-      "id": "http-request-1",
-      "name": "Process Invoice",
+      "id": "poll-emails",
+      "name": "Poll Emails",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "position": [520, 300],
-      "onError": "continueRegularOutput",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        300
+      ],
       "parameters": {
         "method": "POST",
-        "url": "https://tcgptxbqqyxmvsaqiblc.supabase.co/functions/v1/process-invoice",
-        "authentication": "none",
+        "url": "https://tcgptxbqqyxmvsaqiblc.supabase.co/functions/v1/poll-emails",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
         "sendHeaders": true,
         "specifyHeaders": "keypair",
         "headerParameters": {
@@ -38,10 +42,6 @@
             {
               "name": "Authorization",
               "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjZ3B0eGJxcXl4bXZzYXFpYmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzOTQwODksImV4cCI6MjA4NTk3MDA4OX0.nyTEkolz8sft-qFoHpwsLl4F4JkIEW7A3c8aPGftprc"
-            },
-            {
-              "name": "x-api-key",
-              "value": "inv_85faae7910374ee7d0c37cd3af67e6e824445ecc215e0fdf90277436f09e83f2"
             },
             {
               "name": "Content-Type",
@@ -52,7 +52,7 @@
         "sendBody": true,
         "contentType": "json",
         "specifyBody": "json",
-        "jsonBody": "={\n  \"email_subject\": \"{{ $json.subject }}\",\n  \"email_body\": \"{{ $json.snippet || $json.textPlain || '' }}\",\n  \"attachment_text\": {{ $json.textPlain ? '\"' + $json.textPlain + '\"' : 'null' }},\n  \"metadata\": {\n    \"from\": \"{{ $json.from.value[0].address || $json.from }}\",\n    \"gmail_message_id\": \"{{ $json.id }}\"\n  }\n}",
+        "jsonBody": "{}",
         "options": {
           "timeout": 120000,
           "response": {
@@ -62,115 +62,218 @@
             }
           }
         }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "KCRr7stYxqFfvxOi",
+          "name": "Supabase Invoice API Key"
+        }
       }
     },
     {
-      "id": "if-check-success",
-      "name": "Check Success",
+      "id": "check-emails",
+      "name": "Has Emails?",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [780, 300],
+      "typeVersion": 2.2,
+      "position": [
+        740,
+        300
+      ],
       "parameters": {
         "conditions": {
           "options": {
-            "version": 2,
-            "leftValue": "",
             "caseSensitive": true,
+            "leftValue": "",
             "typeValidation": "strict"
           },
-          "combinator": "and",
           "conditions": [
             {
-              "id": "condition-status-200",
+              "id": "1",
+              "leftValue": "={{ $json.body.count }}",
+              "rightValue": 0,
               "operator": {
                 "type": "number",
-                "operation": "equals"
-              },
-              "leftValue": "={{ $json.statusCode }}",
-              "rightValue": 200
+                "operation": "gt"
+              }
             }
-          ]
-        },
-        "options": {}
+          ],
+          "combinator": "and"
+        }
       }
     },
     {
-      "id": "set-log-success",
-      "name": "Log Success",
+      "id": "extract-emails",
+      "name": "Extract Emails",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        200
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const pollResponse = $input.first().json;\nconst body = pollResponse.body || pollResponse;\nconst emails = body.emails || [];\n\nreturn emails.map(email => ({\n  json: {\n    customer_id: email.customer_id || '',\n    email_subject: (email.email_subject || '').substring(0, 200),\n    email_body: (email.email_body || email.email_subject || 'See attached PDF').substring(0, 500),\n    attachment_text: (email.attachment_text || '').substring(0, 5000),\n    pdf_storage_path: email.pdf_storage_path || '',\n    pdf_filename: email.pdf_filename || '',\n    ...(email.metadata ? { metadata: email.metadata } : {})\n  }\n}));"
+      }
+    },
+    {
+      "id": "process-invoice",
+      "name": "Process Invoice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1220,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://tcgptxbqqyxmvsaqiblc.supabase.co/functions/v1/process-invoice",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjZ3B0eGJxcXl4bXZzYXFpYmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzOTQwODksImV4cCI6MjA4NTk3MDA4OX0.nyTEkolz8sft-qFoHpwsLl4F4JkIEW7A3c8aPGftprc"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "KCRr7stYxqFfvxOi",
+          "name": "Supabase Invoice API Key"
+        }
+      }
+    },
+    {
+      "id": "log-result",
+      "name": "Log Result",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [1040, 200],
+      "position": [
+        1460,
+        200
+      ],
       "parameters": {
         "mode": "manual",
+        "duplicateItem": false,
         "assignments": {
           "assignments": [
             {
-              "id": "assign-invoice-id",
+              "id": "email_subject",
+              "name": "email_subject",
+              "value": "={{ $('Extract Emails').item.json.email_subject }}",
+              "type": "string"
+            },
+            {
+              "id": "http_status",
+              "name": "http_status",
+              "value": "={{ $json.statusCode }}",
+              "type": "number"
+            },
+            {
+              "id": "invoice_status",
+              "name": "invoice_status",
+              "value": "={{ $json.body.status || 'unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "invoice_id",
               "name": "invoice_id",
-              "type": "string",
-              "value": "={{ $json.body.invoice_id }}"
-            },
-            {
-              "id": "assign-status",
-              "name": "status",
-              "type": "string",
-              "value": "={{ $json.body.status || 'success' }}"
-            },
-            {
-              "id": "assign-message",
-              "name": "message",
-              "type": "string",
-              "value": "=Invoice processed successfully from email: {{ $('Gmail Trigger').item.json.subject }}"
+              "value": "={{ $json.body.invoice_id || '' }}",
+              "type": "string"
             }
           ]
-        },
-        "includeOtherFields": false,
-        "options": {}
+        }
       }
     },
     {
-      "id": "set-log-error",
-      "name": "Log Error",
+      "id": "log-no-emails",
+      "name": "No New Emails",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [1040, 420],
+      "position": [
+        980,
+        400
+      ],
       "parameters": {
         "mode": "manual",
+        "duplicateItem": false,
         "assignments": {
           "assignments": [
             {
-              "id": "assign-error-status-code",
-              "name": "error_status_code",
-              "type": "number",
-              "value": "={{ $json.statusCode }}"
-            },
-            {
-              "id": "assign-error-message",
-              "name": "error_message",
-              "type": "string",
-              "value": "={{ $json.body.error || $json.body.message || 'Unknown error' }}"
-            },
-            {
-              "id": "assign-error-email-subject",
-              "name": "failed_email_subject",
-              "type": "string",
-              "value": "={{ $('Gmail Trigger').item.json.subject }}"
-            },
-            {
-              "id": "assign-error-email-from",
-              "name": "failed_email_from",
-              "type": "string",
-              "value": "={{ $('Gmail Trigger').item.json.from.value[0].address || $('Gmail Trigger').item.json.from }}"
+              "id": "message",
+              "name": "message",
+              "value": "No new invoice emails found",
+              "type": "string"
             }
           ]
-        },
-        "includeOtherFields": false,
-        "options": {}
+        }
       }
     }
   ],
   "connections": {
-    "Gmail Trigger": {
+    "Every 2 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Poll Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Emails": {
+      "main": [
+        [
+          {
+            "node": "Has Emails?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Emails?": {
+      "main": [
+        [
+          {
+            "node": "Extract Emails",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No New Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Emails": {
       "main": [
         [
           {
@@ -185,25 +288,7 @@
       "main": [
         [
           {
-            "node": "Check Success",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Check Success": {
-      "main": [
-        [
-          {
-            "node": "Log Success",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Log Error",
+            "node": "Log Result",
             "type": "main",
             "index": 0
           }
@@ -213,9 +298,8 @@
   },
   "settings": {
     "executionOrder": "v1",
-    "saveDataErrorExecution": "all",
-    "saveDataSuccessExecution": "all",
-    "saveManualExecutions": true
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
   },
-  "active": false
+  "active": true
 }

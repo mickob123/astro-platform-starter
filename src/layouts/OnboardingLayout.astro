@@ -1,7 +1,6 @@
 ---
 import '../styles/globals.css';
-import '@fontsource/inter/400.css';
-import '@fontsource/inter/800.css';
+import '../styles/docubot.css';
 
 interface Props {
   title: string;
@@ -20,16 +19,16 @@ const steps = [
 ---
 
 <!doctype html>
-<html lang="en" data-theme="lofi">
+<html lang="en" data-theme="docubot">
   <head>
     <meta charset="UTF-8" />
-    <title>{title} | Invoice Dashboard</title>
+    <title>{title} | DocuBot</title>
     <meta name="viewport" content="width=device-width" />
     <meta name="google-client-id" content={import.meta.env.PUBLIC_GOOGLE_CLIENT_ID || ''} />
     <meta name="quickbooks-client-id" content={import.meta.env.PUBLIC_QUICKBOOKS_CLIENT_ID || ''} />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@500&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Roboto:wght@500&display=swap" rel="stylesheet" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
   <body class="min-h-screen bg-base-200">
@@ -45,8 +44,8 @@ const steps = [
     <!-- Minimal header -->
     <div class="navbar bg-base-100 shadow-md px-4">
       <div class="flex-1">
-        <span class="text-lg sm:text-xl font-bold text-base-content">
-          Invoice Dashboard
+        <span class="docubot-wordmark">
+          Docu<span class="bot">Bot</span>
         </span>
       </div>
       <div class="flex-none">

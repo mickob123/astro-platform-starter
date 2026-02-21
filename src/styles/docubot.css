@@ -1,0 +1,213 @@
+/* ═══════════════════════════════════════════════════════════════
+   DocuBot Design System — Custom Component Overrides
+   Applied on top of DaisyUI "docubot" theme
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Global Card Style ── */
+.card {
+  border: 1px solid #E5E7EB;
+  box-shadow: 0 1px 4px rgba(12, 18, 32, 0.06), 0 1px 2px rgba(12, 18, 32, 0.04);
+  border-radius: 12px;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.card:hover {
+  border-color: rgba(108, 92, 231, 0.15);
+}
+
+/* ── Stat Cards: 3px colored left accent bar ── */
+.stat-card-review  { border-left: 3px solid #FFB020; }
+.stat-card-approved { border-left: 3px solid #00C9A7; }
+.stat-card-amount  { border-left: 3px solid #6C5CE7; }
+.stat-card-error   { border-left: 3px solid #FF6B6B; }
+
+/* Stat card labels — mono overline style */
+.stat-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #6B7280;
+}
+
+/* Stat card values — mono */
+.stat-value-mono {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 600;
+}
+
+/* ── Status Badges: pill with 6px colored dot ── */
+.badge-dot::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+.badge-dot.badge-warning::before { background-color: #D4940A; }
+.badge-dot.badge-success::before { background-color: #00C9A7; }
+.badge-dot.badge-error::before   { background-color: #E05555; }
+.badge-dot.badge-info::before    { background-color: #6C5CE7; }
+.badge-dot.badge-ghost::before   { background-color: #6B7280; }
+
+/* ── Filter Bar ── */
+.filter-bar {
+  background-color: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+
+/* ── Period Tabs (Today / This Week / Month / All Time) ── */
+.period-tabs {
+  display: flex;
+  gap: 4px;
+  background: #F3F4F6;
+  border-radius: 8px;
+  padding: 3px;
+}
+.period-tab {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6B7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  background: transparent;
+}
+.period-tab:hover {
+  color: #374151;
+  background: rgba(255, 255, 255, 0.5);
+}
+.period-tab.active {
+  color: #FFFFFF;
+  background: #6C5CE7;
+  box-shadow: 0 1px 3px rgba(108, 92, 231, 0.3);
+}
+
+/* ── DocuBot Wordmark ── */
+.docubot-wordmark {
+  font-size: 20px;
+  font-weight: 800;
+  color: #0C1220;
+  letter-spacing: -0.3px;
+}
+.docubot-wordmark .bot {
+  color: #6C5CE7;
+}
+
+/* ── Table: row hover with indigo tint ── */
+.table tbody tr:hover {
+  background-color: rgba(108, 92, 231, 0.03) !important;
+}
+
+/* Table header cells — mono overline */
+.table thead th {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #6B7280;
+}
+
+/* ── Confidence Score ── */
+.confidence-high   { color: #00C9A7; font-family: 'IBM Plex Mono', monospace; font-weight: 600; }
+.confidence-medium { color: #FFB020; font-family: 'IBM Plex Mono', monospace; font-weight: 600; }
+.confidence-low    { color: #FF6B6B; font-family: 'IBM Plex Mono', monospace; font-weight: 600; }
+
+/* ── Money / Invoice Number: mono font ── */
+.font-data {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 500;
+}
+
+/* ── Navbar ── */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #FFFFFF;
+  border-bottom: 1px solid #E5E7EB;
+  box-shadow: 0 1px 2px rgba(12, 18, 32, 0.04);
+}
+
+/* Nav links */
+.nav-link {
+  font-size: 14px;
+  font-weight: 500;
+  color: #6B7280;
+  padding: 8px 16px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+.nav-link:hover {
+  color: #374151;
+  background: #F3F4F6;
+}
+.nav-link.active {
+  color: #6C5CE7;
+  background: rgba(108, 92, 231, 0.06);
+}
+
+/* ── Button hover refinement ── */
+.btn-primary:hover {
+  background-color: #A29BFE;
+  border-color: #A29BFE;
+}
+
+/* ── Approve / Reject action buttons ── */
+.btn-action-approve {
+  background: rgba(0, 201, 167, 0.1);
+  border: 1px solid rgba(0, 201, 167, 0.2);
+  color: #00C9A7;
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+.btn-action-approve:hover { background: rgba(0, 201, 167, 0.2); }
+
+.btn-action-reject {
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.2);
+  color: #FF6B6B;
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+.btn-action-reject:hover { background: rgba(255, 107, 107, 0.2); }
+
+/* ── Inputs: focus ring ── */
+.input:focus, .select:focus, .textarea:focus {
+  border-color: #6C5CE7;
+  box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.1);
+}
+
+/* ── Collapsible sections ── */
+.collapse-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* ── Content container ── */
+.docubot-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ── Page background ── */
+.bg-docubot {
+  background-color: #F7F5F0;
+}
