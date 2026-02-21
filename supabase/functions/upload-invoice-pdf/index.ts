@@ -32,6 +32,39 @@ Deno.serve(async (req) => {
     // --- Auth ---
     const { customer_id: customerId } = await verifyApiKey(req);
 
+    // --- Rate limiting: max 60 uploads per customer per hour ---
+    const rlSupabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const RATE_LIMIT_MAX = 60;
+    const windowStart = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+    const { count: recentUploads, error: rlError } = await rlSupabase
+      .from("processing_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_id", customerId)
+      .eq("step", "pdf_upload")
+      .gte("created_at", windowStart);
+
+    if (!rlError && recentUploads !== null && recentUploads >= RATE_LIMIT_MAX) {
+      return new Response(
+        JSON.stringify({
+          error: "Rate limit exceeded",
+          detail: `Maximum ${RATE_LIMIT_MAX} uploads per hour.`,
+          retry_after_seconds: 300,
+        }),
+        {
+          status: 429,
+          headers: {
+            ...headers,
+            "Content-Type": "application/json",
+            "Retry-After": "300",
+          },
+        },
+      );
+    }
+
     // --- Params ---
     const url = new URL(req.url);
     const invoiceId = url.searchParams.get("invoice_id");

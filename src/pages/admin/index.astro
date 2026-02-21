@@ -1,0 +1,269 @@
+---
+export const prerender = false;
+import AdminLayout from '../../layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="Organizations">
+  <!-- Platform Stats -->
+  <div id="stats-section" class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+    <div class="card bg-base-100 stat-card-review">
+      <div class="card-body p-3 sm:p-4">
+        <p class="stat-label">Organizations</p>
+        <p id="stat-orgs" class="text-xl sm:text-2xl font-bold mt-1">
+          <span class="loading loading-dots loading-sm"></span>
+        </p>
+      </div>
+    </div>
+    <div class="card bg-base-100 stat-card-approved">
+      <div class="card-body p-3 sm:p-4">
+        <p class="stat-label">Total Users</p>
+        <p id="stat-users" class="text-xl sm:text-2xl font-bold mt-1">
+          <span class="loading loading-dots loading-sm"></span>
+        </p>
+      </div>
+    </div>
+    <div class="card bg-base-100 stat-card-amount">
+      <div class="card-body p-3 sm:p-4">
+        <p class="stat-label">Total Invoices</p>
+        <p id="stat-invoices" class="text-xl sm:text-2xl font-bold mt-1 text-info">
+          <span class="loading loading-dots loading-sm"></span>
+        </p>
+      </div>
+    </div>
+    <div class="card bg-base-100 stat-card-approved">
+      <div class="card-body p-3 sm:p-4">
+        <p class="stat-label">Total Amount</p>
+        <p id="stat-amount" class="text-xl sm:text-2xl stat-value-mono mt-1 text-success truncate">
+          <span class="loading loading-dots loading-sm"></span>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search & Actions -->
+  <div class="card bg-base-100 shadow-sm mb-6">
+    <div class="card-body p-4">
+      <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+        <div class="form-control flex-1 w-full sm:w-auto">
+          <label class="label py-1">
+            <span class="label-text text-xs font-semibold uppercase tracking-wide opacity-60">Search Organizations</span>
+          </label>
+          <input
+            id="search-input"
+            type="text"
+            placeholder="Search by name or email..."
+            class="input input-bordered input-sm w-full"
+          />
+        </div>
+        <a href="/admin/create" class="btn btn-primary btn-sm w-full sm:w-auto no-underline">+ New Organization</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Organizations Table -->
+  <div class="card bg-base-100 shadow-sm">
+    <div class="card-body p-0">
+      <!-- Loading -->
+      <div id="table-loading" class="flex flex-col items-center justify-center py-16">
+        <span class="loading loading-spinner loading-lg text-primary"></span>
+        <p class="mt-3 text-sm opacity-60">Loading organizations...</p>
+      </div>
+
+      <!-- Error -->
+      <div id="table-error" class="hidden flex-col items-center justify-center py-16 px-4 text-center">
+        <p class="font-semibold text-error">Failed to load organizations</p>
+        <p id="error-message" class="text-sm opacity-60 mt-1"></p>
+        <button id="retry-btn" class="btn btn-sm btn-primary mt-4 no-underline">Retry</button>
+      </div>
+
+      <!-- Empty -->
+      <div id="table-empty" class="hidden flex-col items-center justify-center py-16 px-4 text-center">
+        <p class="font-semibold">No organizations found</p>
+        <p class="text-sm opacity-60 mt-1">Create your first organization to get started.</p>
+        <a href="/admin/create" class="btn btn-sm btn-primary mt-4 no-underline">+ New Organization</a>
+      </div>
+
+      <!-- Table -->
+      <div id="table-container" class="hidden overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr class="border-b border-base-200">
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Organization</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden sm:table-cell">Email</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Invoices</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden md:table-cell">Total Amount</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden lg:table-cell">Users</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Status</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden md:table-cell">Created</th>
+            </tr>
+          </thead>
+          <tbody id="org-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pagination -->
+  <div id="pagination-section" class="hidden mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+    <p id="pagination-info" class="text-sm opacity-60"></p>
+    <div class="join">
+      <button id="page-prev" class="join-item btn btn-sm no-underline" disabled>Prev</button>
+      <button id="page-next" class="join-item btn btn-sm no-underline">Next</button>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast-container" class="toast toast-top toast-end z-[100]"></div>
+</AdminLayout>
+
+<style>
+  #org-table-body tr {
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+  }
+  #org-table-body tr:hover {
+    background-color: oklch(var(--b2));
+  }
+</style>
+
+<script>
+  import { getAccessToken, FUNCTIONS_URL } from '../../lib/supabase';
+
+  const API_BASE = `${FUNCTIONS_URL}/admin-platform`;
+
+  let currentPage = 1;
+  let currentSearch = '';
+  let searchTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const searchInput = document.getElementById('search-input') as HTMLInputElement;
+  const tableLoading = document.getElementById('table-loading')!;
+  const tableError = document.getElementById('table-error')!;
+  const errorMessage = document.getElementById('error-message')!;
+  const tableEmpty = document.getElementById('table-empty')!;
+  const tableContainer = document.getElementById('table-container')!;
+  const tableBody = document.getElementById('org-table-body')!;
+  const retryBtn = document.getElementById('retry-btn')!;
+  const paginationSection = document.getElementById('pagination-section')!;
+  const paginationInfo = document.getElementById('pagination-info')!;
+  const pagePrev = document.getElementById('page-prev') as HTMLButtonElement;
+  const pageNext = document.getElementById('page-next') as HTMLButtonElement;
+
+  const currencyFmt = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' });
+  const dateFmt = new Intl.DateTimeFormat('en-AU', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  async function getToken(): Promise<string> {
+    const token = await getAccessToken();
+    if (!token) { window.location.href = '/login'; throw new Error('Not authenticated'); }
+    return token;
+  }
+
+  async function apiFetch(params: string): Promise<any> {
+    const token = await getToken();
+    const res = await fetch(`${API_BASE}?${params}`, {
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+    return res.json();
+  }
+
+  // Load platform stats
+  async function loadStats() {
+    try {
+      const data = await apiFetch('view=stats');
+      document.getElementById('stat-orgs')!.textContent = String(data.total_customers);
+      document.getElementById('stat-users')!.textContent = String(data.total_users);
+      document.getElementById('stat-invoices')!.textContent = String(data.total_invoices);
+      document.getElementById('stat-amount')!.textContent = currencyFmt.format(data.total_amount);
+    } catch (err) {
+      console.error('Stats error:', err);
+    }
+  }
+
+  // Load organizations
+  async function loadOrgs() {
+    tableLoading.classList.remove('hidden');
+    tableLoading.style.display = 'flex';
+    tableError.classList.add('hidden');
+    tableError.style.display = 'none';
+    tableEmpty.classList.add('hidden');
+    tableEmpty.style.display = 'none';
+    tableContainer.classList.add('hidden');
+
+    try {
+      const params = new URLSearchParams({ view: 'overview', page: String(currentPage), limit: '50' });
+      if (currentSearch) params.set('search', currentSearch);
+
+      const data = await apiFetch(params.toString());
+      const orgs = data.customers || [];
+
+      tableLoading.classList.add('hidden');
+      tableLoading.style.display = 'none';
+
+      if (orgs.length === 0) {
+        tableEmpty.classList.remove('hidden');
+        tableEmpty.style.display = 'flex';
+        paginationSection.classList.add('hidden');
+        return;
+      }
+
+      tableContainer.classList.remove('hidden');
+      tableBody.innerHTML = orgs.map((org: any) => `
+        <tr onclick="window.location.href='/admin/org/${org.id}'" class="border-b border-base-200/50">
+          <td>
+            <div class="font-medium">${escapeHtml(org.name)}</div>
+            <div class="text-xs opacity-50 sm:hidden">${escapeHtml(org.email || '')}</div>
+          </td>
+          <td class="hidden sm:table-cell text-sm opacity-70">${escapeHtml(org.email || '--')}</td>
+          <td class="font-mono text-sm">${org.invoice_count ?? 0}</td>
+          <td class="hidden md:table-cell font-mono text-sm">${org.total_amount ? currencyFmt.format(org.total_amount) : '$0.00'}</td>
+          <td class="hidden lg:table-cell text-sm">${org.user_count ?? 0}</td>
+          <td>${org.is_active ? '<span class="badge badge-sm badge-success">Active</span>' : '<span class="badge badge-sm badge-error">Inactive</span>'}</td>
+          <td class="hidden md:table-cell text-sm opacity-70">${org.created_at ? dateFmt.format(new Date(org.created_at)) : '--'}</td>
+        </tr>
+      `).join('');
+
+      // Pagination
+      const p = data.pagination;
+      if (p && p.total_pages > 1) {
+        paginationSection.classList.remove('hidden');
+        paginationSection.style.display = 'flex';
+        paginationInfo.textContent = `Page ${p.page} of ${p.total_pages} (${p.total} organizations)`;
+        pagePrev.disabled = p.page <= 1;
+        pageNext.disabled = p.page >= p.total_pages;
+      } else {
+        paginationSection.classList.add('hidden');
+      }
+    } catch (err: any) {
+      tableLoading.classList.add('hidden');
+      tableLoading.style.display = 'none';
+      tableError.classList.remove('hidden');
+      tableError.style.display = 'flex';
+      errorMessage.textContent = err.message;
+    }
+  }
+
+  function escapeHtml(str: string): string {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // Event listeners
+  searchInput.addEventListener('input', () => {
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      currentSearch = searchInput.value;
+      currentPage = 1;
+      loadOrgs();
+    }, 300);
+  });
+
+  pagePrev.addEventListener('click', () => { if (currentPage > 1) { currentPage--; loadOrgs(); } });
+  pageNext.addEventListener('click', () => { currentPage++; loadOrgs(); });
+  retryBtn.addEventListener('click', () => { loadOrgs(); loadStats(); });
+
+  // Initial load
+  loadStats();
+  loadOrgs();
+</script>
+</AdminLayout>

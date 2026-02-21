@@ -6,34 +6,34 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
 <DashboardLayout title="Expenses">
   <!-- ===== Summary Stats Cards (4 cards) ===== -->
   <div id="stats-section" class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-2">
-    <div class="card bg-base-100 shadow-sm">
+    <div class="card bg-base-100 stat-card-review">
       <div class="card-body p-3 sm:p-4">
-        <p class="text-[10px] sm:text-xs uppercase tracking-wide opacity-60 font-semibold">Needs Review</p>
+        <p class="stat-label">Needs Review</p>
         <p id="stat-needs-review" class="text-xl sm:text-2xl font-bold mt-1 text-warning">
           <span class="loading loading-dots loading-sm"></span>
         </p>
       </div>
     </div>
-    <div class="card bg-base-100 shadow-sm">
+    <div class="card bg-base-100 stat-card-approved">
       <div class="card-body p-3 sm:p-4">
-        <p class="text-[10px] sm:text-xs uppercase tracking-wide opacity-60 font-semibold">Approved</p>
+        <p class="stat-label">Approved</p>
         <p id="stat-approved" class="text-xl sm:text-2xl font-bold mt-1 text-success">
           <span class="loading loading-dots loading-sm"></span>
         </p>
       </div>
     </div>
-    <div class="card bg-base-100 shadow-sm">
+    <div class="card bg-base-100 stat-card-amount">
       <div class="card-body p-3 sm:p-4">
-        <p class="text-[10px] sm:text-xs uppercase tracking-wide opacity-60 font-semibold leading-tight">Amount Awaiting</p>
-        <p id="stat-amount-awaiting" class="text-xl sm:text-2xl font-bold mt-1 text-info truncate">
+        <p class="stat-label">Amount Awaiting</p>
+        <p id="stat-amount-awaiting" class="text-xl sm:text-2xl stat-value-mono mt-1 text-info truncate">
           <span class="loading loading-dots loading-sm"></span>
         </p>
       </div>
     </div>
-    <div class="card bg-base-100 shadow-sm">
+    <div class="card bg-base-100 stat-card-approved">
       <div class="card-body p-3 sm:p-4">
-        <p class="text-[10px] sm:text-xs uppercase tracking-wide opacity-60 font-semibold">Amt Approved</p>
-        <p id="stat-amount-approved" class="text-xl sm:text-2xl font-bold mt-1 text-success truncate">
+        <p class="stat-label">Amt Approved</p>
+        <p id="stat-amount-approved" class="text-xl sm:text-2xl stat-value-mono mt-1 text-success truncate">
           <span class="loading loading-dots loading-sm"></span>
         </p>
       </div>
@@ -44,16 +44,16 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   <p id="stat-total-line" class="text-sm opacity-50 mt-2 mb-4 text-center"></p>
 
   <!-- ===== Time Range Preset Buttons ===== -->
-  <div class="flex flex-wrap gap-2 mb-4" id="time-range-buttons">
-    <button class="btn btn-sm" data-range="today">Today</button>
-    <button class="btn btn-sm" data-range="week">This Week</button>
-    <button class="btn btn-sm" data-range="month">This Month</button>
-    <button class="btn btn-sm btn-active" data-range="all">All Time</button>
+  <div class="period-tabs mb-4" id="time-range-buttons">
+    <button class="period-tab" data-range="today">Today</button>
+    <button class="period-tab" data-range="week">This Week</button>
+    <button class="period-tab" data-range="month">This Month</button>
+    <button class="period-tab active" data-range="all">All Time</button>
   </div>
 
   <!-- ===== Filters & Search Bar ===== -->
-  <div class="card bg-base-100 shadow-sm mb-6">
-    <div class="card-body p-4">
+  <div class="filter-bar mb-6">
+    <div class="">
       <div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-3 items-start sm:items-end">
         <!-- Search -->
         <div class="form-control col-span-2 sm:flex-1 sm:min-w-[180px]">
@@ -177,6 +177,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     <button id="bulk-approve" class="btn btn-sm btn-success flex-1 sm:flex-none min-w-0">Approve</button>
     <button id="bulk-reject" class="btn btn-sm btn-error flex-1 sm:flex-none min-w-0">Reject</button>
     <button id="bulk-delete" class="btn btn-sm btn-error btn-outline flex-1 sm:flex-none min-w-0">Delete</button>
+    <button id="bulk-reclassify" class="btn btn-sm btn-warning btn-outline flex-1 sm:flex-none min-w-0">→ Invoices</button>
     <button id="bulk-cancel" class="btn btn-sm btn-ghost flex-1 sm:flex-none min-w-0">Cancel</button>
   </div>
 
@@ -282,6 +283,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   const bulkApproveBtn = document.getElementById('bulk-approve')!;
   const bulkRejectBtn = document.getElementById('bulk-reject')!;
   const bulkDeleteBtn = document.getElementById('bulk-delete')!;
+  const bulkReclassifyBtn = document.getElementById('bulk-reclassify')!;
   const bulkCancelBtn = document.getElementById('bulk-cancel')!;
 
   const exportCsvBtn = document.getElementById('export-csv')!;
@@ -320,9 +322,9 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   function formatConfidence(confidence: number | null | undefined): { text: string; class: string } {
     if (confidence == null) return { text: '--', class: 'opacity-40' };
     const pct = Math.round(confidence * 100);
-    if (pct >= 90) return { text: `${pct}%`, class: 'text-success font-semibold' };
-    if (pct >= 70) return { text: `${pct}%`, class: 'text-warning font-semibold' };
-    return { text: `${pct}%`, class: 'text-error font-semibold' };
+    if (pct >= 90) return { text: `${pct}%`, class: 'confidence-high' };
+    if (pct >= 70) return { text: `${pct}%`, class: 'confidence-medium' };
+    return { text: `${pct}%`, class: 'confidence-low' };
   }
 
   // ─── Status Badge ─────────────────────────────────────────────────
@@ -337,7 +339,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     };
     const info = map[status] || { class: 'badge-ghost', label: status };
     const iconHtml = info.icon ? `${info.icon} ` : '';
-    return `<span class="badge badge-sm ${info.class} gap-1">${iconHtml}${info.label}</span>`;
+    return `<span class="badge badge-sm badge-dot ${info.class} gap-1">${info.label}</span>`;
   }
 
   function getSyncBadge(syncStatus: string | null): string {
@@ -416,7 +418,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
 
   // ─── Bulk Action API ──────────────────────────────────────────────
   async function callBulkActionEndpoint(
-    action: 'approve' | 'reject' | 'delete' | 'export_csv',
+    action: 'approve' | 'reject' | 'delete' | 'reclassify' | 'export_csv',
     expenseIds: string[]
   ): Promise<Response> {
     const token = await getAuthToken();
@@ -572,9 +574,9 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     return `
       <tr onclick="window.location.href='/invoice/${exp.id}'" class="border-b border-base-200/50 hover:bg-base-200/50 cursor-pointer transition-colors">
         <td onclick="event.stopPropagation()" class="admin-only"><input type="checkbox" class="checkbox checkbox-sm row-checkbox" data-expense-id="${exp.id}" ${isChecked} /></td>
-        <td class="font-mono text-sm font-medium">${escapeHtml(exp.invoice_number || '--')}</td>
+        <td class="font-data text-sm">${escapeHtml(exp.invoice_number || '--')}</td>
         <td class="max-w-[120px] sm:max-w-[200px] truncate">${escapeHtml(vendorDisplay)}</td>
-        <td class="font-mono font-medium">${formatCurrency(exp.total)}</td>
+        <td class="font-data">${formatCurrency(exp.total)}</td>
         <td class="hidden sm:table-cell text-sm">${formatDate(exp.invoice_date)}</td>
         <td class="hidden md:table-cell text-sm">${formatDate(exp.due_date || exp.invoice_date)}</td>
         <td><div class="flex flex-wrap items-center gap-0.5">${getStatusBadge(exp.status || 'pending')}${exp.status === 'approved' ? getSyncBadge(exp.sync_status) : ''}</div></td>
@@ -744,11 +746,11 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   }
 
   function setActiveRangeButton(range: string) {
-    timeRangeButtons.querySelectorAll('button').forEach((btn) => {
-      if (btn.dataset.range === range) {
-        btn.classList.add('btn-active');
+    timeRangeButtons.querySelectorAll('.period-tab').forEach((btn) => {
+      if ((btn as HTMLElement).dataset.range === range) {
+        btn.classList.add('active');
       } else {
-        btn.classList.remove('btn-active');
+        btn.classList.remove('active');
       }
     });
   }
@@ -830,12 +832,14 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   }
 
   // ─── Bulk Action Handlers ─────────────────────────────────────────
-  async function executeBulkAction(action: 'approve' | 'reject' | 'delete') {
+  async function executeBulkAction(action: 'approve' | 'reject' | 'delete' | 'reclassify') {
     if (selectedExpenses.size === 0) return;
 
     const ids = Array.from(selectedExpenses);
-    const actionLabel = action === 'delete' ? 'delete' : action;
-    const confirmMsg = `Are you sure you want to ${actionLabel} ${ids.length} expense${ids.length !== 1 ? 's' : ''}?`;
+    const actionLabel = action === 'reclassify' ? 'move to invoices' : action;
+    const confirmMsg = action === 'reclassify'
+      ? `Move ${ids.length} item${ids.length !== 1 ? 's' : ''} to Invoices?`
+      : `Are you sure you want to ${actionLabel} ${ids.length} expense${ids.length !== 1 ? 's' : ''}?`;
     if (!confirm(confirmMsg)) return;
 
     try {
@@ -846,16 +850,13 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
       selectAllCheckbox.checked = false;
       updateBulkUI();
 
+      const n = result.processed;
+      const noun = `${n} item${n !== 1 ? 's' : ''}`;
+      const pastLabel = action === 'reclassify' ? 'moved to Invoices' : `${actionLabel}d`;
       if (result.errors && result.errors.length > 0) {
-        showToast(
-          `${result.processed} expense${result.processed !== 1 ? 's' : ''} ${actionLabel}d. ${result.errors.length} failed.`,
-          result.processed > 0 ? 'info' : 'error'
-        );
+        showToast(`${noun} ${pastLabel}. ${result.errors.length} failed.`, n > 0 ? 'info' : 'error');
       } else {
-        showToast(
-          `${result.processed} expense${result.processed !== 1 ? 's' : ''} ${actionLabel}d successfully.`,
-          'success'
-        );
+        showToast(`${noun} ${pastLabel} successfully.`, 'success');
       }
 
       await loadExpenses();
@@ -936,6 +937,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
   bulkApproveBtn.addEventListener('click', () => executeBulkAction('approve'));
   bulkRejectBtn.addEventListener('click', () => executeBulkAction('reject'));
   bulkDeleteBtn.addEventListener('click', () => executeBulkAction('delete'));
+  bulkReclassifyBtn.addEventListener('click', () => executeBulkAction('reclassify'));
   bulkCancelBtn.addEventListener('click', () => {
     selectedExpenses.clear();
     selectAllCheckbox.checked = false;

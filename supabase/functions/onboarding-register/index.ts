@@ -33,6 +33,26 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
     const { email, password, company_name } = body;
 
+    // --- Rate limiting: max 5 registrations globally per hour ---
+    // No auth available, so we cap total registrations to prevent spam.
+    const rlSupabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const windowStart = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+    const { count: recentRegistrations, error: rlError } = await rlSupabase
+      .from("customers")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", windowStart);
+
+    if (!rlError && recentRegistrations !== null && recentRegistrations >= 5) {
+      return new Response(
+        JSON.stringify({ error: "Too many registrations. Please try again later.", retry_after_seconds: 600 }),
+        { status: 429, headers: { ...headers, "Content-Type": "application/json", "Retry-After": "600" } },
+      );
+    }
+
     if (!email || !password || !company_name) {
       return new Response(
         JSON.stringify({ error: "email, password, and company_name are required" }),

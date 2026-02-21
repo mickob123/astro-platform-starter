@@ -1,0 +1,92 @@
+---
+import '../styles/globals.css';
+import '../styles/docubot.css';
+
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en" data-theme="docubot">
+  <head>
+    <meta charset="UTF-8" />
+    <title>{title} | DocuBot Admin</title>
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  </head>
+  <body class="min-h-screen bg-base-200">
+
+    <!-- Auth check: must be admin -->
+    <script>
+      import { supabase } from '../lib/supabase';
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        window.location.href = '/login';
+      } else {
+        const role = session.user.app_metadata?.role;
+        if (role !== 'admin') {
+          window.location.href = '/dashboard';
+        }
+      }
+    </script>
+
+    <div class="navbar bg-neutral text-neutral-content px-4">
+      <div class="flex-1">
+        <a href="/admin" class="docubot-wordmark no-underline hover:opacity-80">
+          Docu<span class="bot">Bot</span> <span class="text-sm font-normal opacity-60 ml-2">Admin</span>
+        </a>
+      </div>
+      <div class="flex-none gap-1 sm:gap-2 items-center">
+        <a href="/admin" class="btn btn-ghost btn-sm no-underline hidden md:inline-flex">Organizations</a>
+        <a href="/admin/users" class="btn btn-ghost btn-sm no-underline hidden md:inline-flex">Users</a>
+        <a href="/admin/pipeline" class="btn btn-ghost btn-sm no-underline hidden md:inline-flex">Pipeline</a>
+        <a href="/admin/create" class="btn btn-ghost btn-sm no-underline hidden md:inline-flex">+ New Org</a>
+        <div class="divider divider-horizontal mx-0 hidden md:flex"></div>
+        <a href="/dashboard" class="btn btn-ghost btn-sm no-underline hidden md:inline-flex">&larr; Back to Dashboard</a>
+        <button id="logout-btn" class="btn btn-ghost btn-sm text-error hidden md:inline-flex">Logout</button>
+
+        <!-- Mobile menu -->
+        <div class="dropdown dropdown-end md:hidden">
+          <label tabindex="0" class="btn btn-ghost btn-sm btn-square">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </label>
+          <ul tabindex="0" class="dropdown-content z-[1] menu menu-sm p-2 shadow-lg bg-base-100 text-base-content rounded-box w-52 mt-2 border border-base-200">
+            <li><a href="/admin" class="no-underline">Organizations</a></li>
+            <li><a href="/admin/users" class="no-underline">Users</a></li>
+            <li><a href="/admin/pipeline" class="no-underline">Pipeline</a></li>
+            <li><a href="/admin/create" class="no-underline">+ New Org</a></li>
+            <li class="mt-2 border-t border-base-200 pt-2"><a href="/dashboard" class="no-underline font-medium">&larr; Back to Dashboard</a></li>
+            <li><button id="mobile-logout-btn" class="text-error">Logout</button></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <main class="docubot-container px-3 sm:px-4 py-4 sm:py-6">
+      <slot />
+    </main>
+
+    <footer class="text-center text-xs text-base-content/40 py-6">
+      <span>&copy; 2026 Agentive Group Co Pty Ltd. &mdash; Internal Admin</span>
+    </footer>
+
+    <script>
+      import { supabase } from '../lib/supabase';
+      const logoutHandler = async () => {
+        await supabase.auth.signOut();
+        window.location.href = '/login';
+      };
+      document.getElementById('logout-btn')?.addEventListener('click', logoutHandler);
+      document.getElementById('mobile-logout-btn')?.addEventListener('click', logoutHandler);
+    </script>
+  </body>
+</html>

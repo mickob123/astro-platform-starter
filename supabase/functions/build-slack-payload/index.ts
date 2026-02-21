@@ -7,7 +7,23 @@ Deno.serve(async (req: Request) => {
   const headers = getCorsHeaders(req);
 
   try {
-    const { customer_id } = await verifyApiKey(req);
+    const { customer_id, supabase: authSupabase } = await verifyApiKey(req);
+
+    // --- Rate limiting: max 60 Slack payload builds per customer per hour ---
+    const windowStart = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: recentCalls, error: rlError } = await authSupabase
+      .from("processing_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_id", customer_id)
+      .eq("step", "build_slack_payload")
+      .gte("created_at", windowStart);
+
+    if (!rlError && recentCalls !== null && recentCalls >= 60) {
+      return new Response(
+        JSON.stringify({ error: "Rate limit exceeded", detail: "Maximum 60 payload builds per hour.", retry_after_seconds: 300 }),
+        { status: 429, headers: { ...headers, "Content-Type": "application/json", "Retry-After": "300" } },
+      );
+    }
 
     if (req.method !== "POST") {
       return new Response(JSON.stringify({ error: "Method not allowed" }), {

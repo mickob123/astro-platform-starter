@@ -217,6 +217,15 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
                 </svg>
                 Reject Invoice
               </button>
+              <!-- Reclassify button -->
+              <div id="reclassify-section" class="hidden border-t border-base-200 pt-3 mt-1">
+                <button id="btn-reclassify" class="btn btn-outline btn-sm w-full no-underline">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                  </svg>
+                  <span id="reclassify-label">Move to Expenses</span>
+                </button>
+              </div>
               <!-- View PDF button (shown only when PDF is attached) -->
               <div id="pdf-section" class="hidden border-t border-base-200 pt-3 mt-1">
                 <button id="btn-view-pdf" class="btn btn-outline btn-info w-full no-underline">
@@ -597,7 +606,7 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
         : invoice.id.substring(0, 8);
 
       // Update page title
-      document.title = `${invoice.invoice_number || docLabel} | Invoice Dashboard`;
+      document.title = `${invoice.invoice_number || docLabel} | DocuBot`;
 
       // Update back link and breadcrumb to point to correct list
       const backLink = document.querySelector('a[href="/dashboard"]') as HTMLAnchorElement | null;
@@ -682,6 +691,12 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
       const canAct = ['pending', 'flagged'].includes(invoice.status);
       btnApproveEl.disabled = !canAct;
       btnRejectEl.disabled = !canAct;
+
+      // Reclassify button
+      const reclassifySection = document.getElementById('reclassify-section')!;
+      const reclassifyLabel = document.getElementById('reclassify-label')!;
+      reclassifySection.classList.remove('hidden');
+      reclassifyLabel.textContent = isExpense ? 'Move to Invoices' : 'Move to Expenses';
     }
 
     function renderLineItems(lineItems: LineItem[] | null, currency: string | null) {
@@ -704,9 +719,9 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
         tr.innerHTML = `
           <td class="text-base-content/50">${idx + 1}</td>
           <td>${escapeHtml(item.description || '--')}</td>
-          <td class="text-right font-mono">${item.quantity ?? '--'}</td>
-          <td class="text-right font-mono">${formatCurrency(item.unit_price, currency)}</td>
-          <td class="text-right font-mono font-semibold">${formatCurrency(item.total, currency)}</td>
+          <td class="text-right font-data">${item.quantity ?? '--'}</td>
+          <td class="text-right font-data">${formatCurrency(item.unit_price, currency)}</td>
+          <td class="text-right font-data font-semibold">${formatCurrency(item.total, currency)}</td>
         `;
         tbody.appendChild(tr);
       });
@@ -1377,6 +1392,50 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
     document.getElementById('btn-reject')?.addEventListener('click', async () => {
       const confirmed = await showConfirmModal('reject');
       if (confirmed) await performAction('reject');
+    });
+
+    // --- Reclassify handler ---
+    document.getElementById('btn-reclassify')?.addEventListener('click', async () => {
+      if (!currentInvoice) return;
+      const token = await getAuthToken();
+      if (!token) return;
+
+      const isExpense = currentInvoice.document_type === 'expense';
+      const newType = isExpense ? 'invoice' : 'expense';
+      const targetLabel = isExpense ? 'Invoices' : 'Expenses';
+
+      const btn = document.getElementById('btn-reclassify') as HTMLButtonElement;
+      btn.disabled = true;
+      btn.querySelector('span')!.textContent = 'Moving...';
+
+      try {
+        const res = await fetch(`${FUNCTIONS_URL}/approve-invoice`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            invoice_id: currentInvoice.id,
+            updates: { document_type: newType },
+          }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `Failed: ${res.status}`);
+        }
+
+        // Redirect to the appropriate list
+        const redirectUrl = newType === 'expense' ? '/expenses' : '/dashboard';
+        window.location.href = redirectUrl;
+      } catch (err: any) {
+        btn.disabled = false;
+        btn.querySelector('span')!.textContent = `Move to ${targetLabel}`;
+        const feedback = document.getElementById('action-feedback')!;
+        feedback.classList.remove('hidden');
+        feedback.innerHTML = `<div class="alert alert-error text-sm"><span>${err.message}</span></div>`;
+      }
     });
 
     // --- Comment event handlers ---

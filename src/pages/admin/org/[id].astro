@@ -1,0 +1,268 @@
+---
+export const prerender = false;
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+const { id } = Astro.params;
+---
+
+<AdminLayout title="Organization Detail">
+  <!-- Breadcrumb -->
+  <div class="text-sm breadcrumbs mb-4">
+    <ul>
+      <li><a href="/admin" class="no-underline opacity-60">Organizations</a></li>
+      <li id="breadcrumb-name" class="opacity-40">Loading...</li>
+    </ul>
+  </div>
+
+  <!-- Loading -->
+  <div id="page-loading" class="flex flex-col items-center justify-center py-24">
+    <span class="loading loading-spinner loading-lg text-primary"></span>
+    <p class="mt-3 text-sm opacity-60">Loading organization...</p>
+  </div>
+
+  <!-- Error -->
+  <div id="page-error" class="hidden flex-col items-center justify-center py-24 text-center">
+    <p class="font-semibold text-error">Failed to load organization</p>
+    <p id="error-message" class="text-sm opacity-60 mt-1"></p>
+    <a href="/admin" class="btn btn-sm btn-primary mt-4 no-underline">Back to Organizations</a>
+  </div>
+
+  <!-- Content -->
+  <div id="page-content" class="hidden space-y-6">
+
+    <!-- Org Header Card -->
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body p-4 sm:p-6">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 id="org-name" class="text-xl sm:text-2xl font-bold"></h1>
+            <p id="org-email" class="text-sm opacity-60 mt-1"></p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span id="org-status-badge"></span>
+            <span id="org-platform-badge"></span>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 pt-4 border-t border-base-200">
+          <div>
+            <p class="text-xs uppercase tracking-wide opacity-50 font-semibold">Total Invoices</p>
+            <p id="org-invoice-count" class="text-lg font-bold mt-0.5">--</p>
+          </div>
+          <div>
+            <p class="text-xs uppercase tracking-wide opacity-50 font-semibold">Total Amount</p>
+            <p id="org-total-amount" class="text-lg font-bold mt-0.5 text-success">--</p>
+          </div>
+          <div>
+            <p class="text-xs uppercase tracking-wide opacity-50 font-semibold">Pending</p>
+            <p id="org-pending" class="text-lg font-bold mt-0.5 text-warning">--</p>
+          </div>
+          <div>
+            <p class="text-xs uppercase tracking-wide opacity-50 font-semibold">Errors</p>
+            <p id="org-errors" class="text-lg font-bold mt-0.5 text-error">--</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Team Members -->
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body p-4 sm:p-6">
+        <h2 class="font-bold text-sm uppercase tracking-wide opacity-60 mb-3">Team Members</h2>
+        <div id="members-empty" class="hidden text-sm opacity-50 py-4 text-center">No team members found.</div>
+        <div id="members-table" class="hidden overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr class="border-b border-base-200">
+                <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Email</th>
+                <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Role</th>
+                <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden sm:table-cell">Last Sign In</th>
+                <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden md:table-cell">Created</th>
+              </tr>
+            </thead>
+            <tbody id="members-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- API Keys -->
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body p-4 sm:p-6">
+        <h2 class="font-bold text-sm uppercase tracking-wide opacity-60 mb-3">API Keys</h2>
+        <div id="keys-empty" class="hidden text-sm opacity-50 py-4 text-center">No API keys found.</div>
+        <div id="keys-table" class="hidden overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr class="border-b border-base-200">
+                <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Name</th>
+                <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Status</th>
+                <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden sm:table-cell">Created</th>
+              </tr>
+            </thead>
+            <tbody id="keys-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Invoices -->
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body p-4 sm:p-6">
+        <h2 class="font-bold text-sm uppercase tracking-wide opacity-60 mb-3">Recent Invoices</h2>
+        <div id="invoices-empty" class="hidden text-sm opacity-50 py-4 text-center">No invoices found.</div>
+        <div id="invoices-table" class="hidden overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr class="border-b border-base-200">
+                <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Invoice #</th>
+                <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Vendor</th>
+                <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Amount</th>
+                <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden sm:table-cell">Date</th>
+                <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Status</th>
+                <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden md:table-cell">Type</th>
+              </tr>
+            </thead>
+            <tbody id="invoices-body"></tbody>
+          </table>
+        </div>
+        <div id="invoices-more" class="hidden text-center mt-3">
+          <p class="text-sm opacity-50">Showing 20 most recent. <span id="invoices-total-count"></span> total.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</AdminLayout>
+
+<script define:vars={{ id }}>
+  window.__orgId = id;
+</script>
+
+<script>
+  import { getAccessToken, FUNCTIONS_URL } from '../../../lib/supabase';
+
+  const API_BASE = `${FUNCTIONS_URL}/admin-platform`;
+  const orgId = (window as any).__orgId;
+
+  const currencyFmt = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' });
+  const dateFmt = new Intl.DateTimeFormat('en-AU', { month: 'short', day: 'numeric', year: 'numeric' });
+  const dateTimeFmt = new Intl.DateTimeFormat('en-AU', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  function escapeHtml(str: string): string {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function statusBadge(status: string): string {
+    const map: Record<string, { cls: string; label: string }> = {
+      pending: { cls: 'badge-warning', label: 'Pending' },
+      approved: { cls: 'badge-success', label: 'Approved' },
+      flagged: { cls: 'badge-error', label: 'Flagged' },
+      rejected: { cls: 'badge-error', label: 'Rejected' },
+      synced: { cls: 'badge-info', label: 'Synced' },
+      error: { cls: 'badge-error', label: 'Error' },
+    };
+    const info = map[status] || { cls: 'badge-ghost', label: status };
+    return `<span class="badge badge-sm ${info.cls}">${info.label}</span>`;
+  }
+
+  async function load() {
+    const token = await getAccessToken();
+    if (!token) { window.location.href = '/login'; return; }
+
+    try {
+      const res = await fetch(`${API_BASE}?view=customer&id=${orgId}`, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+      const data = await res.json();
+
+      document.getElementById('page-loading')!.classList.add('hidden');
+      document.getElementById('page-content')!.classList.remove('hidden');
+
+      const c = data.customer;
+      document.getElementById('breadcrumb-name')!.textContent = c.name;
+      document.getElementById('org-name')!.textContent = c.name;
+      document.getElementById('org-email')!.textContent = c.email || '--';
+      document.getElementById('org-status-badge')!.innerHTML = c.is_active
+        ? '<span class="badge badge-success">Active</span>'
+        : '<span class="badge badge-error">Inactive</span>';
+      document.getElementById('org-platform-badge')!.innerHTML = c.accounting_platform
+        ? `<span class="badge badge-outline badge-sm">${escapeHtml(c.accounting_platform)}</span>`
+        : '';
+
+      // Stats
+      const s = data.stats;
+      document.getElementById('org-invoice-count')!.textContent = String(s.total_invoices);
+      document.getElementById('org-total-amount')!.textContent = currencyFmt.format(s.total_amount);
+      document.getElementById('org-pending')!.textContent = String(s.pending);
+      document.getElementById('org-errors')!.textContent = String(s.errors);
+
+      // Members
+      const members = data.members || [];
+      if (members.length === 0) {
+        document.getElementById('members-empty')!.classList.remove('hidden');
+        document.getElementById('members-empty')!.style.display = 'block';
+      } else {
+        document.getElementById('members-table')!.classList.remove('hidden');
+        document.getElementById('members-body')!.innerHTML = members.map((m: any) => `
+          <tr class="border-b border-base-200/50">
+            <td class="text-sm">${escapeHtml(m.email || '--')}</td>
+            <td><span class="badge badge-sm ${m.role === 'admin' ? 'badge-primary' : 'badge-ghost'}">${m.role}</span></td>
+            <td class="hidden sm:table-cell text-sm opacity-70">${m.last_sign_in_at ? dateTimeFmt.format(new Date(m.last_sign_in_at)) : 'Never'}</td>
+            <td class="hidden md:table-cell text-sm opacity-70">${m.created_at ? dateFmt.format(new Date(m.created_at)) : '--'}</td>
+          </tr>
+        `).join('');
+      }
+
+      // API Keys
+      const keys = data.api_keys || [];
+      if (keys.length === 0) {
+        document.getElementById('keys-empty')!.classList.remove('hidden');
+        document.getElementById('keys-empty')!.style.display = 'block';
+      } else {
+        document.getElementById('keys-table')!.classList.remove('hidden');
+        document.getElementById('keys-body')!.innerHTML = keys.map((k: any) => `
+          <tr class="border-b border-base-200/50">
+            <td class="text-sm">${escapeHtml(k.name || 'Unnamed key')}</td>
+            <td>${k.is_active ? '<span class="badge badge-sm badge-success">Active</span>' : '<span class="badge badge-sm badge-error">Inactive</span>'}</td>
+            <td class="hidden sm:table-cell text-sm opacity-70">${k.created_at ? dateFmt.format(new Date(k.created_at)) : '--'}</td>
+          </tr>
+        `).join('');
+      }
+
+      // Invoices
+      const invoices = data.invoices || [];
+      if (invoices.length === 0) {
+        document.getElementById('invoices-empty')!.classList.remove('hidden');
+        document.getElementById('invoices-empty')!.style.display = 'block';
+      } else {
+        document.getElementById('invoices-table')!.classList.remove('hidden');
+        document.getElementById('invoices-body')!.innerHTML = invoices.map((inv: any) => `
+          <tr class="border-b border-base-200/50 hover:bg-base-200/50 cursor-pointer" onclick="window.location.href='/invoice/${inv.id}'">
+            <td class="font-mono text-sm font-medium">${escapeHtml(inv.invoice_number || '--')}</td>
+            <td class="text-sm max-w-[150px] truncate">${escapeHtml(inv.vendors?.name || '--')}</td>
+            <td class="font-mono text-sm">${inv.total != null ? currencyFmt.format(inv.total) : '--'}</td>
+            <td class="hidden sm:table-cell text-sm">${inv.invoice_date ? dateFmt.format(new Date(inv.invoice_date)) : '--'}</td>
+            <td>${statusBadge(inv.status || 'pending')}</td>
+            <td class="hidden md:table-cell"><span class="badge badge-sm badge-ghost">${inv.document_type || 'invoice'}</span></td>
+          </tr>
+        `).join('');
+
+        if ((data.invoice_count || 0) > 20) {
+          document.getElementById('invoices-more')!.classList.remove('hidden');
+          document.getElementById('invoices-total-count')!.textContent = `${data.invoice_count}`;
+        }
+      }
+
+    } catch (err: any) {
+      document.getElementById('page-loading')!.classList.add('hidden');
+      document.getElementById('page-error')!.classList.remove('hidden');
+      document.getElementById('page-error')!.style.display = 'flex';
+      document.getElementById('error-message')!.textContent = err.message;
+    }
+  }
+
+  load();
+</script>
+</AdminLayout>

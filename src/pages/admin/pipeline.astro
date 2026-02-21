@@ -1,0 +1,508 @@
+---
+export const prerender = false;
+import AdminLayout from '../../layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="Pipeline Health">
+  <!-- Overview Stats -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+    <div class="card bg-base-100 stat-card-approved">
+      <div class="card-body p-3 sm:p-4">
+        <p class="stat-label">Healthy</p>
+        <p id="stat-healthy" class="text-xl sm:text-2xl font-bold mt-1 text-success">
+          <span class="loading loading-dots loading-sm"></span>
+        </p>
+      </div>
+    </div>
+    <div class="card bg-base-100 stat-card-review">
+      <div class="card-body p-3 sm:p-4">
+        <p class="stat-label">Degraded</p>
+        <p id="stat-degraded" class="text-xl sm:text-2xl font-bold mt-1 text-warning">
+          <span class="loading loading-dots loading-sm"></span>
+        </p>
+      </div>
+    </div>
+    <div class="card bg-base-100 stat-card-review">
+      <div class="card-body p-3 sm:p-4">
+        <p class="stat-label">Down</p>
+        <p id="stat-down" class="text-xl sm:text-2xl font-bold mt-1 text-error">
+          <span class="loading loading-dots loading-sm"></span>
+        </p>
+      </div>
+    </div>
+    <div class="card bg-base-100 stat-card-amount">
+      <div class="card-body p-3 sm:p-4">
+        <p class="stat-label">Dead Letter</p>
+        <p id="stat-dead-letter" class="text-xl sm:text-2xl font-bold mt-1 text-info">
+          <span class="loading loading-dots loading-sm"></span>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auto-refresh indicator -->
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-lg font-bold">Customer Health</h2>
+    <div class="flex items-center gap-2">
+      <span id="refresh-indicator" class="text-xs opacity-50">Auto-refresh: 30s</span>
+      <button id="refresh-btn" class="btn btn-ghost btn-xs">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Customer Health Table -->
+  <div class="card bg-base-100 shadow-sm mb-6">
+    <div class="card-body p-0">
+      <div id="health-loading" class="flex flex-col items-center justify-center py-16">
+        <span class="loading loading-spinner loading-lg text-primary"></span>
+        <p class="mt-3 text-sm opacity-60">Loading pipeline health...</p>
+      </div>
+
+      <div id="health-error" class="hidden flex-col items-center justify-center py-16 px-4 text-center">
+        <p class="font-semibold text-error">Failed to load pipeline health</p>
+        <p id="health-error-msg" class="text-sm opacity-60 mt-1"></p>
+        <button id="health-retry-btn" class="btn btn-sm btn-primary mt-4">Retry</button>
+      </div>
+
+      <div id="health-empty" class="hidden flex-col items-center justify-center py-16 px-4 text-center">
+        <p class="font-semibold">No active pipeline customers</p>
+        <p class="text-sm opacity-60 mt-1">Customers with active email connections will appear here.</p>
+      </div>
+
+      <div id="health-table" class="hidden overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr class="border-b border-base-200">
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Customer</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Status</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden sm:table-cell">Last Poll</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden md:table-cell">Errors (24h)</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden md:table-cell">Queue</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Dead Letter</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden lg:table-cell">Connections</th>
+            </tr>
+          </thead>
+          <tbody id="health-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alerts Section -->
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-lg font-bold">Recent Alerts</h2>
+    <span id="alert-count" class="badge badge-sm badge-neutral"></span>
+  </div>
+
+  <div class="card bg-base-100 shadow-sm mb-6">
+    <div class="card-body p-0">
+      <div id="alerts-loading" class="flex items-center justify-center py-8">
+        <span class="loading loading-spinner loading-md text-primary"></span>
+      </div>
+      <div id="alerts-empty" class="hidden text-center py-8">
+        <p class="text-sm opacity-60">No recent alerts</p>
+      </div>
+      <div id="alerts-list" class="hidden divide-y divide-base-200"></div>
+    </div>
+  </div>
+
+  <!-- Dead Letter Section -->
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-lg font-bold">Dead Letter Queue</h2>
+    <span id="dl-count" class="badge badge-sm badge-error"></span>
+  </div>
+
+  <div class="card bg-base-100 shadow-sm mb-6">
+    <div class="card-body p-0">
+      <div id="dl-loading" class="flex items-center justify-center py-8">
+        <span class="loading loading-spinner loading-md text-primary"></span>
+      </div>
+      <div id="dl-empty" class="hidden text-center py-8">
+        <p class="text-sm opacity-60">No dead letter items</p>
+      </div>
+      <div id="dl-table-container" class="hidden overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr class="border-b border-base-200">
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">
+                <label><input type="checkbox" id="dl-select-all" class="checkbox checkbox-xs" /></label>
+              </th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Email</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden sm:table-cell">Message ID</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold">Attempts</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden md:table-cell">Last Error</th>
+              <th class="text-xs uppercase tracking-wide opacity-60 font-semibold hidden md:table-cell">Updated</th>
+            </tr>
+          </thead>
+          <tbody id="dl-table-body"></tbody>
+        </table>
+        <div class="p-3 border-t border-base-200 flex items-center gap-2">
+          <button id="dl-retry-selected" class="btn btn-primary btn-xs" disabled>Retry Selected</button>
+          <button id="dl-retry-all" class="btn btn-outline btn-xs" disabled>Retry All</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast-container" class="toast toast-top toast-end z-[100]"></div>
+</AdminLayout>
+
+<style>
+  #health-table-body tr {
+    transition: background-color 0.15s ease;
+  }
+  #health-table-body tr:hover {
+    background-color: oklch(var(--b2));
+  }
+</style>
+
+<script>
+  import { getAccessToken, FUNCTIONS_URL } from '../../lib/supabase';
+
+  const HEALTH_API = `${FUNCTIONS_URL}/admin-pipeline-health`;
+  const RETRY_API = `${FUNCTIONS_URL}/retry-dead-letter`;
+  let refreshTimer: ReturnType<typeof setInterval> | null = null;
+
+  // Formatters
+  const dateFmt = new Intl.DateTimeFormat('en-AU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  function timeAgo(dateStr: string | null): string {
+    if (!dateStr) return 'Never';
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60_000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+  }
+
+  function statusBadge(status: string): string {
+    const map: Record<string, string> = {
+      healthy: 'badge-success',
+      degraded: 'badge-warning',
+      down: 'badge-error',
+      unknown: 'badge-ghost',
+    };
+    return `<span class="badge badge-sm ${map[status] || 'badge-ghost'}">${status}</span>`;
+  }
+
+  function severityIcon(severity: string): string {
+    if (severity === 'critical') return '<span class="text-error font-bold mr-1">!</span>';
+    if (severity === 'warning') return '<span class="text-warning font-bold mr-1">!</span>';
+    return '<span class="text-info mr-1">i</span>';
+  }
+
+  function escapeHtml(str: string): string {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function showToast(message: string, type: 'success' | 'error' = 'success') {
+    const container = document.getElementById('toast-container')!;
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type === 'success' ? 'success' : 'error'} text-sm py-2 px-4`;
+    alert.textContent = message;
+    container.appendChild(alert);
+    setTimeout(() => alert.remove(), 4000);
+  }
+
+  async function getToken(): Promise<string> {
+    const token = await getAccessToken();
+    if (!token) { window.location.href = '/login'; throw new Error('Not authenticated'); }
+    return token;
+  }
+
+  async function apiFetch(url: string, options: RequestInit = {}): Promise<any> {
+    const token = await getToken();
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      },
+    });
+    if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+    return res.json();
+  }
+
+  // ─── Load Overview + Customer Health ──────────────────────────────
+  async function loadHealth() {
+    const loading = document.getElementById('health-loading')!;
+    const error = document.getElementById('health-error')!;
+    const empty = document.getElementById('health-empty')!;
+    const table = document.getElementById('health-table')!;
+    const tbody = document.getElementById('health-table-body')!;
+
+    loading.classList.remove('hidden');
+    loading.style.display = 'flex';
+    error.classList.add('hidden');
+    error.style.display = 'none';
+    empty.classList.add('hidden');
+    empty.style.display = 'none';
+    table.classList.add('hidden');
+
+    try {
+      const data = await apiFetch(HEALTH_API);
+      const overview = data.overview || {};
+      const customers = data.customers || [];
+
+      // Update stat cards
+      document.getElementById('stat-healthy')!.textContent = String(overview.healthy ?? 0);
+      document.getElementById('stat-degraded')!.textContent = String(overview.degraded ?? 0);
+      document.getElementById('stat-down')!.textContent = String(overview.down ?? 0);
+      document.getElementById('stat-dead-letter')!.textContent = String(overview.total_dead_letter ?? 0);
+
+      loading.classList.add('hidden');
+      loading.style.display = 'none';
+
+      if (customers.length === 0) {
+        empty.classList.remove('hidden');
+        empty.style.display = 'flex';
+        return data;
+      }
+
+      table.classList.remove('hidden');
+      tbody.innerHTML = customers.map((c: any) => `
+        <tr class="border-b border-base-200/50">
+          <td>
+            <div class="font-medium">${escapeHtml(c.name)}</div>
+          </td>
+          <td>${statusBadge(c.pipeline_status)}</td>
+          <td class="hidden sm:table-cell text-sm opacity-70">${timeAgo(c.last_poll_at)}</td>
+          <td class="hidden md:table-cell font-mono text-sm ${c.error_count_24h > 0 ? 'text-error' : ''}">${c.error_count_24h}</td>
+          <td class="hidden md:table-cell font-mono text-sm">${c.queue_depth}</td>
+          <td class="font-mono text-sm ${c.dead_letter_count > 0 ? 'text-error font-bold' : ''}">${c.dead_letter_count}</td>
+          <td class="hidden lg:table-cell text-sm">
+            ${(c.connections || []).map((conn: any) => `
+              <div class="text-xs opacity-70 flex items-center gap-1">
+                <span class="inline-block w-2 h-2 rounded-full ${conn.last_poll_status === 'success' ? 'bg-success' : conn.last_poll_status === 'error' ? 'bg-error' : 'bg-base-300'}"></span>
+                ${escapeHtml(conn.email || '')}
+                ${conn.consecutive_failures > 0 ? `<span class="text-error">(${conn.consecutive_failures} fails)</span>` : ''}
+              </div>
+            `).join('')}
+          </td>
+        </tr>
+      `).join('');
+
+      return data;
+    } catch (err: any) {
+      loading.classList.add('hidden');
+      loading.style.display = 'none';
+      error.classList.remove('hidden');
+      error.style.display = 'flex';
+      document.getElementById('health-error-msg')!.textContent = err.message;
+      return null;
+    }
+  }
+
+  // ─── Load Alerts ──────────────────────────────────────────────────
+  function renderAlerts(alerts: any[]) {
+    const loading = document.getElementById('alerts-loading')!;
+    const empty = document.getElementById('alerts-empty')!;
+    const list = document.getElementById('alerts-list')!;
+    const countBadge = document.getElementById('alert-count')!;
+
+    loading.classList.add('hidden');
+
+    const unacked = alerts.filter((a: any) => !a.acknowledged);
+    countBadge.textContent = unacked.length > 0 ? `${unacked.length} unacknowledged` : '';
+
+    if (alerts.length === 0) {
+      empty.classList.remove('hidden');
+      empty.style.display = 'block';
+      list.classList.add('hidden');
+      return;
+    }
+
+    empty.classList.add('hidden');
+    empty.style.display = 'none';
+    list.classList.remove('hidden');
+
+    list.innerHTML = alerts.map((a: any) => `
+      <div class="flex items-start gap-3 p-3 ${a.acknowledged ? 'opacity-50' : ''}">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            ${severityIcon(a.severity)}
+            <span class="font-medium text-sm">${escapeHtml(a.alert_type)}</span>
+            ${a.customer_name ? `<span class="text-xs opacity-60">${escapeHtml(a.customer_name)}</span>` : ''}
+            <span class="text-xs opacity-40 ml-auto">${timeAgo(a.created_at)}</span>
+          </div>
+          <p class="text-sm opacity-70 mt-1 truncate">${escapeHtml(a.message)}</p>
+        </div>
+        ${!a.acknowledged ? `<button class="btn btn-ghost btn-xs ack-btn" data-alert-id="${a.id}">Ack</button>` : ''}
+      </div>
+    `).join('');
+
+    // Bind acknowledge buttons
+    list.querySelectorAll('.ack-btn').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        const alertId = (e.currentTarget as HTMLElement).dataset.alertId;
+        try {
+          await apiFetch(HEALTH_API, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'acknowledge_alert', alert_id: alertId }),
+          });
+          showToast('Alert acknowledged');
+          loadAll();
+        } catch (err: any) {
+          showToast(`Failed: ${err.message}`, 'error');
+        }
+      });
+    });
+  }
+
+  // ─── Load Dead Letter Queue ───────────────────────────────────────
+  let deadLetterItems: any[] = [];
+
+  async function loadDeadLetter() {
+    const loading = document.getElementById('dl-loading')!;
+    const empty = document.getElementById('dl-empty')!;
+    const tableContainer = document.getElementById('dl-table-container')!;
+    const tbody = document.getElementById('dl-table-body')!;
+    const countBadge = document.getElementById('dl-count')!;
+
+    loading.classList.remove('hidden');
+    empty.classList.add('hidden');
+    empty.style.display = 'none';
+    tableContainer.classList.add('hidden');
+
+    try {
+      const data = await apiFetch(`${HEALTH_API}?view=dead_letter`);
+      deadLetterItems = data.dead_letter_items || [];
+
+      loading.classList.add('hidden');
+      countBadge.textContent = deadLetterItems.length > 0 ? String(deadLetterItems.length) : '';
+
+      if (deadLetterItems.length === 0) {
+        empty.classList.remove('hidden');
+        empty.style.display = 'block';
+        (document.getElementById('dl-retry-all') as HTMLButtonElement).disabled = true;
+        return;
+      }
+
+      tableContainer.classList.remove('hidden');
+      (document.getElementById('dl-retry-all') as HTMLButtonElement).disabled = false;
+
+      tbody.innerHTML = deadLetterItems.map((item: any) => {
+        const email = item.email_connections?.email_address || 'Unknown';
+        return `
+          <tr class="border-b border-base-200/50">
+            <td><label><input type="checkbox" class="checkbox checkbox-xs dl-checkbox" data-id="${item.id}" data-customer="${item.customer_id}" /></label></td>
+            <td class="text-sm">${escapeHtml(email)}</td>
+            <td class="hidden sm:table-cell font-mono text-xs opacity-60 max-w-[120px] truncate">${escapeHtml(item.gmail_message_id || '')}</td>
+            <td class="font-mono text-sm">${item.attempt_count}</td>
+            <td class="hidden md:table-cell text-xs opacity-60 max-w-[200px] truncate">${escapeHtml(item.last_error || '--')}</td>
+            <td class="hidden md:table-cell text-sm opacity-70">${timeAgo(item.updated_at)}</td>
+          </tr>
+        `;
+      }).join('');
+
+      updateRetryButtons();
+    } catch (err: any) {
+      loading.classList.add('hidden');
+      empty.classList.remove('hidden');
+      empty.style.display = 'block';
+      (empty.querySelector('p') as HTMLElement).textContent = `Error: ${err.message}`;
+    }
+  }
+
+  function getSelectedDedupIds(): string[] {
+    return Array.from(document.querySelectorAll('.dl-checkbox:checked')).map(
+      (cb) => (cb as HTMLInputElement).dataset.id!
+    );
+  }
+
+  function updateRetryButtons() {
+    const selected = getSelectedDedupIds();
+    (document.getElementById('dl-retry-selected') as HTMLButtonElement).disabled = selected.length === 0;
+  }
+
+  // ─── Load All ─────────────────────────────────────────────────────
+  async function loadAll() {
+    const data = await loadHealth();
+    if (data) {
+      renderAlerts(data.recent_alerts || []);
+    }
+    await loadDeadLetter();
+  }
+
+  // ─── Event Listeners ──────────────────────────────────────────────
+  document.getElementById('refresh-btn')!.addEventListener('click', loadAll);
+  document.getElementById('health-retry-btn')!.addEventListener('click', loadAll);
+
+  // Dead letter select all
+  document.getElementById('dl-select-all')!.addEventListener('change', (e) => {
+    const checked = (e.target as HTMLInputElement).checked;
+    document.querySelectorAll('.dl-checkbox').forEach((cb) => {
+      (cb as HTMLInputElement).checked = checked;
+    });
+    updateRetryButtons();
+  });
+
+  // Dead letter checkbox change
+  document.getElementById('dl-table-body')!.addEventListener('change', (e) => {
+    if ((e.target as HTMLElement).classList.contains('dl-checkbox')) {
+      updateRetryButtons();
+    }
+  });
+
+  // Retry selected
+  document.getElementById('dl-retry-selected')!.addEventListener('click', async () => {
+    const ids = getSelectedDedupIds();
+    if (ids.length === 0) return;
+    try {
+      const result = await apiFetch(RETRY_API, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'retry', dedup_ids: ids }),
+      });
+      showToast(`Retried ${result.retried} item(s)`);
+      loadAll();
+    } catch (err: any) {
+      showToast(`Retry failed: ${err.message}`, 'error');
+    }
+  });
+
+  // Retry all
+  document.getElementById('dl-retry-all')!.addEventListener('click', async () => {
+    if (!confirm('Retry all dead letter items?')) return;
+    // Get unique customer IDs from dead letter items
+    const customerIds = [...new Set(deadLetterItems.map((item: any) => item.customer_id))];
+    let totalRetried = 0;
+    try {
+      for (const customerId of customerIds) {
+        const result = await apiFetch(RETRY_API, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'retry_all', customer_id: customerId }),
+        });
+        totalRetried += result.retried || 0;
+      }
+      showToast(`Retried ${totalRetried} item(s)`);
+      loadAll();
+    } catch (err: any) {
+      showToast(`Retry failed: ${err.message}`, 'error');
+    }
+  });
+
+  // Auto-refresh every 30 seconds
+  function startAutoRefresh() {
+    if (refreshTimer) clearInterval(refreshTimer);
+    refreshTimer = setInterval(() => {
+      const indicator = document.getElementById('refresh-indicator')!;
+      indicator.textContent = 'Refreshing...';
+      loadAll().then(() => {
+        indicator.textContent = 'Auto-refresh: 30s';
+      });
+    }, 30_000);
+  }
+
+  // Initial load
+  loadAll();
+  startAutoRefresh();
+</script>
